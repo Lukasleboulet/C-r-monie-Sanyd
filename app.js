@@ -7,6 +7,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
 const F = m => m == null ? '–' : Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0');
+const BAR_MAX = 300; // barres d’heures : pleines à 5h (300 min)
 const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 function tparse(line, loose) { // "43h30min", "43:30", "43.5" -> minutes
@@ -64,7 +65,7 @@ function listHtml() {
   const q = norm(flt.q), wi = flt.w ?? S.weeks.length - 1;
   const L = sorted().filter(a => (!flt.g || a.grade === flt.g) && (!q || norm(full(a) + ' ' + a.mat).includes(q)));
   return `<div class="wrapt"><table><thead><tr><th>Matricule</th><th>Agent</th><th>Grade</th><th>Heures (semaine du ${S.weeks[wi]})</th><th></th></tr></thead><tbody>` +
-    L.map(a => `<tr><td class="mono">${can('agentEdit') ? `<input class="ein" data-a="emat" data-id="${a.id}" value="${esc(a.mat)}">` : esc(a.mat)}</td><td>${can('agentEdit') ? `<input class="ein" data-a="epre" data-id="${a.id}" value="${esc(a.prenom)}" placeholder="Prénom"> <input class="ein" data-a="enom" data-id="${a.id}" value="${esc(a.nom)}" placeholder="Nom">` : `<span class="av">${esc(((a.prenom || '')[0] || '') + ((a.nom || '')[0] || ''))}</span>${esc(full(a))}`}</td><td>${can('agentEdit') ? `<select class="ein" data-a="egr" data-id="${a.id}">${gopts(a.grade)}</select>` : badge(a.grade)}</td><td class="hcell">${F(a.w[wi])}<span class="mini"><i style="width:${Math.min(100, (a.w[wi] || 0) / 54)}%"></i></span></td><td>${can('agentDel') ? `<button class="btn del" data-a="del" data-id="${a.id}">Retirer</button>` : ''}</td></tr>`).join('') +
+    L.map(a => `<tr><td class="mono">${can('agentEdit') ? `<input class="ein" data-a="emat" data-id="${a.id}" value="${esc(a.mat)}">` : esc(a.mat)}</td><td>${can('agentEdit') ? `<input class="ein" data-a="epre" data-id="${a.id}" value="${esc(a.prenom)}" placeholder="Prénom"> <input class="ein" data-a="enom" data-id="${a.id}" value="${esc(a.nom)}" placeholder="Nom">` : `<span class="av">${esc(((a.prenom || '')[0] || '') + ((a.nom || '')[0] || ''))}</span>${esc(full(a))}`}</td><td>${can('agentEdit') ? `<select class="ein" data-a="egr" data-id="${a.id}">${gopts(a.grade)}</select>` : badge(a.grade)}</td><td class="hcell">${F(a.w[wi])}<span class="mini"><i style="width:${Math.min(100, (a.w[wi] || 0) / BAR_MAX * 100)}%"></i></span></td><td>${can('agentDel') ? `<button class="btn del" data-a="del" data-id="${a.id}">Retirer</button>` : ''}</td></tr>`).join('') +
     `</tbody></table></div>` + (L.length ? '' : '<p class="note">Aucun agent.</p>');
 }
 function vEff() {
@@ -642,7 +643,7 @@ function staDetail(a) {
   <section class="panel"><h2>Cérémonies & suivi</h2><p class="note">${cer.length} cérémonie(s) avec des données · ${nS} sanction(s) · ${nA} absence(s)</p>${cer.length ? `<div class="wrapt"><table><thead><tr><th>Semaine</th><th>Décision</th><th>Sanction</th><th>Casiers</th><th>Forma PS</th><th>Forma 10-20</th><th>Fusillade</th><th>Absence</th><th>Explication</th><th>Notes</th></tr></thead><tbody>` +
     cer.map(o => { const d = o.d, x = S.actions.find(y => y.id === d.a); return `<tr><td>${o.wk}</td><td>${x ? `${sym(x)} ${esc(x.label)}${d.g ? ` → ${esc(d.g)}` : ''}${d.done ? '' : ' <span class="note">(prévu)</span>'}` : '—'}</td><td>${esc(d.sanction || '—')}</td><td>${esc(d.casiers ?? '—')}</td><td>${yes(d.fps)}</td><td>${yes(d.f1020)}</td><td>${yes(d.fus)}</td><td>${yes(d.abs)}</td><td>${esc(d.r || '—')}</td><td>${esc(d.notes || '—')}</td></tr>`; }).join('') + `</tbody></table></div>` : ''}</section>
   <section class="panel"><h2>Détail semaine par semaine</h2><div class="wrapt" style="max-height:340px"><table><thead><tr><th>Semaine</th><th>Heures</th><th>Écart à la moyenne</th><th></th></tr></thead><tbody>` +
-    wk.map(i => { const v = a.w[i]; return `<tr><td>${S.weeks[i]}</td><td class="hcell">${F(v)}</td><td class="hcell">${v == null || !s.n ? '—' : Fd(v - s.avg)}</td><td><span class="mini"><i style="width:${Math.min(100, (v || 0) / 54)}%"></i></span></td></tr>`; }).join('') + `</tbody></table></div></section>`;
+    wk.map(i => { const v = a.w[i]; return `<tr><td>${S.weeks[i]}</td><td class="hcell">${F(v)}</td><td class="hcell">${v == null || !s.n ? '—' : Fd(v - s.avg)}</td><td><span class="mini"><i style="width:${Math.min(100, (v || 0) / BAR_MAX * 100)}%"></i></span></td></tr>`; }).join('') + `</tbody></table></div></section>`;
 }
 function vSta() {
   if (st.id && !S.agents.some(a => a.id === st.id)) st.id = null;
