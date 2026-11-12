@@ -379,3 +379,8 @@ th{top:var(--toph,0px)}
 .lights{height:2px;opacity:.85}
 html.light .appbar{background:rgba(255,250,241,.95)}html.light .ab-clk{background:#fffdf8}html.light #clk b{color:var(--fg)}
 @media(max-width:950px){.ab-clk,.ucard>div{display:none}.ucard{padding:4px}}
+/* Statistiques : la liste des agents se colle sous l'en-tête (et non derrière) */
+.sl{position:sticky;top:calc(var(--toph,0px) - 6px)}
+.alist{max-height:calc(100vh - var(--toph,0px) - 330px);overscroll-behavior:contain}
+/* bandeau sous la barre du haut : fin dégradé orange, sans clignotement */
+.lights{height:2px;opacity:1;animation:none;background:linear-gradient(90deg,transparent,var(--acc) 15%,var(--acc2) 50%,var(--acc) 85%,transparent);background-size:auto;box-shadow:0 0 12px rgba(240,138,60,.35)}
