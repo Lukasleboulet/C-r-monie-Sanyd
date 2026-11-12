@@ -6,6 +6,8 @@ header('Content-Type: text/plain; charset=utf-8'); header('Cache-Control: no-sto
 db_open(); $u = authed();
 if (!$u || !is_admin($u)) { db_close(); echo "Connecte-toi d'abord au site avec un compte administrateur, puis recharge cette page.\n"; exit; }
 $sh = $db->state->sheet ?? null; $url = (string)($sh->url ?? ''); $gid = (string)($sh->gid ?? ''); $dist = (string)($sh->district ?? '');
+$saved = $url; if (!empty($_GET['url'])) { $url = (string)$_GET['url']; if (preg_match('#[\#&?]gid=(\d+)#', $url, $g)) $gid = $g[1]; } // test direct : diagnostic.php?url=LIEN_DU_SHEET
+if (!empty($_GET['district'])) $dist = (string)$_GET['district'];
 db_close();
 $ok = fn($b) => $b ? 'OK' : 'ÉCHEC';
 echo "=== Serveur ===\nPHP " . PHP_VERSION . " · cURL : " . (function_exists('curl_init') ? 'oui' : 'NON') . "\n";
@@ -14,7 +16,9 @@ echo "IP via DNS-over-HTTPS : " . (function_exists('curl_init') ? (implode(', ',
 echo "=== Discord ===\n";
 try { [$c] = http_req('https://discord.com/api/v10/gateway'); echo "API Discord : HTTP $c → " . $ok($c === 200) . "\n"; } catch (Throwable $e) { echo "API Discord : ÉCHEC → " . $e->getMessage() . "\n"; }
 echo "\n=== Google Sheet ===\n";
-echo "Lien enregistré : " . ($url ?: '(aucun — colle-le dans Administration › Gestion des médailles)') . "\n";
+echo "Lien enregistré sur le site : " . ($saved ?: "(aucun — colle-le dans Administration › Gestion des médailles, puis vérifie que le voyant en haut est vert = enregistré)") . "\n";
+if ($url !== $saved) echo "Lien testé (paramètre ?url=) : $url\n";
+if (!$url) echo "Astuce : tu peux tester directement avec diagnostic.php?url=LIEN_DU_SHEET\n";
 echo "gid : " . ($gid ?: '(aucun → 1er onglet)') . " · district : " . ($dist ?: '(aucun)') . "\n";
 $src = sheet_url($url, $gid !== '' ? $gid : null);
 if (!$src) { echo "→ Lien invalide : il doit ressembler à https://docs.google.com/spreadsheets/d/…\n"; exit; }

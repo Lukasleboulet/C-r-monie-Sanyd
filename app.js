@@ -778,6 +778,7 @@ function buildPreview(parsed) {
   syncP = { items, unknown: [...unknown], nIgn: ign.length, nRec: keep.length, dcols: parsed.dcols };
 }
 async function doSync() {
+  { const u = ($('#murl')?.value || '').trim(); if (u && u !== S.sheet.url) { S.sheet.url = u; const g = (u.match(/[#&?]gid=(\d+)/) || [])[1]; if (g) S.sheet.gid = g; save(); } } // lien du champ, même s'il n'est pas encore enregistré
   if (!S.sheet.url) { await dlg({ title: 'Lien manquant', msg: 'Colle d’abord le lien de ton Google Sheet.', cancel: null, icon: 'warn' }); return; }
   $('#msync').disabled = true; $('#msync').textContent = 'Lecture du Sheet…';
   try {
