@@ -1,5 +1,5 @@
 # SAMP · Sandy Shore — hébergement PHP (InfinityFree, etc.)
-DirectoryIndex index.html
+DirectoryIndex index.php index.html
 Options -Indexes
 # Fichiers à ne jamais servir
 <FilesMatch "^(lib\.php|config\.php|config\.example\.php|server\.js|seed\.json|package\.json|config\.json|LISEZ-MOI\.md|\.gitignore)$">

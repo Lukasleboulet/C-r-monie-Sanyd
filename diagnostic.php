@@ -14,6 +14,7 @@ echo "=== Serveur ===\nPHP " . PHP_VERSION . " · cURL : " . (function_exists('c
 echo "DNS google : " . (gethostbyname('docs.google.com') !== 'docs.google.com' ? 'OK' : 'bloqué (contournement DNS-over-HTTPS utilisé)') . "\n";
 echo "IP via DNS-over-HTTPS : " . (function_exists('curl_init') ? (implode(', ', doh_ips('docs.google.com')) ?: 'indisponible') : '-') . "\n\n";
 echo "=== Discord ===\n";
+echo "Connexion par identifiant / mot de passe : " . (pwd_on() ? "ACTIVÉE" . (discord_on() ? " (passwordLogin dans config.php)" : " (Discord non configuré)") : "désactivée — Discord uniquement") . "\n";
 try { [$c] = http_req('https://discord.com/api/v10/gateway'); echo "API Discord : HTTP $c → " . $ok($c === 200) . "\n"; } catch (Throwable $e) { echo "API Discord : ÉCHEC → " . $e->getMessage() . "\n"; }
 echo "\n=== Google Sheet ===\n";
 echo "Lien enregistré sur le site : " . ($saved ?: "(aucun — colle-le dans Administration › Gestion des médailles, puis vérifie que le voyant en haut est vert = enregistré)") . "\n";
