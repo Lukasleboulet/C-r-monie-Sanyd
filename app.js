@@ -1,7 +1,7 @@
 // ====== SAMP · District de Sandy Shore : suivi des heures & cérémonies (site + serveur Node.js : comptes, rôles et données partagés) ======
 const DEFAULT_GRADES = ['Capitaine','Lieutenant-Chef','Lieutenant','Sergent-2','Sergent-1','SLO','Officier-3','Officier-2','Officier','Rookie']; // du plus haut au plus bas
 const RIB_COLORS = ['#4f8ad8', '#3dbb7a', '#e0b23a', '#e0733a', '#c9473f', '#8e5bd6'];
-const defaultMedals = () => [2, 4, 6, 8, 10, 12].map((m, i) => ({ id: 'rub' + m, name: `Ruban de service — ${m} mois`, months: m, color: RIB_COLORS[i], img: '' }));
+const defaultMedals = () => [2, 4, 6, 8, 10, 12].map((m, i) => ({ id: 'rub' + m, name: `Ruban de service — ${m} mois`, n: m, u: 'm', color: RIB_COLORS[i], img: '' }));
 const DEFAULT_ACTIONS = [{ id: 'promo', label: 'Montée', mv: -1 }, { id: 'retro', label: 'Rétrogradation', mv: 1 }]; // mv : décalage dans la hiérarchie (-1 monte, 1 descend, 0 = aucun)
 const DEFAULT_SANCTIONS = ['Avertissement', 'Blâme', 'Mise à pied']; // modifiables par l'admin (Paramètres)
 const KEY = 'samp-sandy-shore-v1'; // clé propre à ce site (ne pas partager avec le site Vespucci)
@@ -43,7 +43,8 @@ function migrate(d) { // le grade « Rookie-PPA » n'existe pas : fusionné dans
   d.actions ||= DEFAULT_ACTIONS.map(x => ({ ...x }));
   d.gcol ||= {};
   d.glog ||= [];
-  d.medals ||= defaultMedals(); d.awards ||= {}; d.sheet ||= { url: '', gid: '', district: 'Sandy Shore', gmap: {}, last: 0 };
+  d.medals ||= defaultMedals();
+  d.medals.forEach(m => { if (m.months && !m.n) { m.n = m.months; m.u = 'm'; } delete m.months; }); // ancienneté : nombre + unité (j, s, m, a) d.awards ||= {}; d.sheet ||= { url: '', gid: '', district: 'Sandy Shore', gmap: {}, last: 0 };
   d.ignRanks ||= ['Patron', 'Sheriff']; // rangs ignorés à l'import et masqués (sauf agents ajoutés à la main)
   d.sanctions ||= [...DEFAULT_SANCTIONS];
   Object.values(d.ceremonies || {}).forEach(c => Object.values(c).forEach(x => ['fps', 'f1020', 'fus', 'abs'].forEach(k => { if (k in x && typeof x[k] !== 'boolean') x[k] = !!x[k] && x[k] !== 'Non'; })));
@@ -694,15 +695,20 @@ function frDate(s) { // "21/05/2023", "1/5/23", "2023-05-21" -> "2023-05-21"
 const fmtD = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '—';
 function addMonths(iso, n) { const [y, m, d] = iso.split('-').map(Number), t = new Date(y, m - 1 + n, 1), last = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate(); return `${t.getFullYear()}-${pad2(t.getMonth() + 1)}-${pad2(Math.min(d, last))}`; }
 function monthsSince(iso) { if (!iso) return null; const [y, m, d] = iso.split('-').map(Number), n = new Date(); let k = (n.getFullYear() - y) * 12 + n.getMonth() - (m - 1); if (n.getDate() < d) k--; return Math.max(0, k); }
+const UNITS = { j: ['jour', 'jours', 'j'], s: ['semaine', 'semaines', 'sem.'], m: ['mois', 'mois', 'mois'], a: ['an', 'ans', 'an'] };
+const durTxt = md => `${md.n} ${UNITS[md.u || 'm'][md.n > 1 ? 1 : 0]}`;
+const durShort = md => (md.u || 'm') === 'm' ? String(md.n) : md.n + ({ j: 'j', s: 's', a: 'a' })[md.u];
+function addDur(iso, md) { const u = md.u || 'm', n = +md.n || 0; if (u === 'm' || u === 'a') return addMonths(iso, u === 'a' ? n * 12 : n); const [y, m, d] = iso.split('-').map(Number), t = new Date(y, m - 1, d + (u === 's' ? 7 * n : n)); return `${t.getFullYear()}-${pad2(t.getMonth() + 1)}-${pad2(t.getDate())}`; }
 const daysUntil = iso => Math.ceil((new Date(iso + 'T00:00:00') - new Date(todayIso() + 'T00:00:00')) / 864e5);
 const anc = iso => { const k = monthsSince(iso); return k == null ? '—' : k < 12 ? `${k} mois` : `${Math.floor(k / 12)} an${k >= 24 ? 's' : ''}${k % 12 ? ` ${k % 12} mois` : ''}`; };
+const uOpts = sel => Object.entries(UNITS).map(([k, v]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${v[1]}</option>`).join('');
 function medState(a, md) { // { earned: date d'obtention ou null, due: date prévue (rubans), given: remis le (timestamp) }
   const aw = S.awards?.[a.id]?.[md.id];
-  if (md.months) { const due = a.arr ? addMonths(a.arr, md.months) : null; return { earned: due && due <= todayIso() ? due : null, due, given: aw?.given || null }; }
+  if (md.n) { const due = a.arr ? addDur(a.arr, md) : null; return { earned: due && due <= todayIso() ? due : null, due, given: aw?.given || null }; }
   return { earned: aw?.at || null, due: null, given: aw ? aw.given || aw.t || 1 : null };
 }
 const medIcon = (md, cls = '') => md.img ? `<img class="mic ${cls}" src="${md.img}" alt="${esc(md.name)}" title="${esc(md.name)}">`
-  : `<span class="mic rib ${cls}" style="--c:${esc(md.color || '#b8a47c')}" title="${esc(md.name)}">${md.months ? `<i>${md.months}</i>` : ''}</span>`;
+  : `<span class="mic rib ${cls}" style="--c:${esc(md.color || '#b8a47c')}" title="${esc(md.name)}">${md.n ? `<i>${durShort(md)}</i>` : ''}</span>`;
 function agentMedals(a) { return S.medals.map(md => ({ md, s: medState(a, md) })).filter(o => o.s.earned); }
 const medRow = a => agentMedals(a).map(({ md, s }) => s.given ? medIcon(md) : `<span class="mpend" title="${esc(md.name)} — obtenu le ${fmtD(s.earned)}, pas encore remis">${medIcon(md)}</span>`).join('') || '<span class="note">—</span>';
 
@@ -722,8 +728,8 @@ function csvParse(t) {
 const gkey = s => norm(s).replace(/\biii\b/g, '3').replace(/\bii\b/g, '2').replace(/\biv\b/g, '4').replace(/\bchief\b/g, 'chef').replace(/\b(du|de|des|la|le)\b/g, '').replace(/[^a-z0-9]/g, '');
 const mapG = name => { const m = S.sheet.gmap || {}; if (name in m) return m[name] || null; return S.grades.find(g => gkey(g) === gkey(name)) || null; };
 function sheetRecords(rows) {
-  const h = rows.findIndex(r => r.some(c => norm(c) === 'matricule') && r.some(c => /^pr[eé]nom$/i.test(c.trim())));
-  if (h < 0) throw new Error('Ligne d’en-tête introuvable (colonnes « Matricule » et « Prénom » attendues).');
+  const h = rows.findIndex(r => r.some(c => norm(c) === 'matricule') && r.some(c => norm(c) === 'prenom'));
+  if (h < 0) throw new Error(`Ligne d’en-tête introuvable : les colonnes « Matricule » et « Prénom » n’apparaissent pas dans les ${rows.length} ligne(s) lues. Si tes agents sont dans un autre onglet du Sheet, renseigne le gid (le nombre après « gid= » dans l’adresse quand cet onglet est ouvert).`);
   const H = rows[h].map(c => norm(c)), col = (...k) => H.findIndex(x => k.includes(x));
   const C = { mat: col('matricule'), grade: col('grade'), pre: col('prenom'), nom: col('nom'), did: col('id discord', 'discord', 'id discord '), dis: col('district') };
   if (C.pre < 0 || C.nom < 0) throw new Error('Colonnes « Prénom » et « Nom » introuvables.');
@@ -765,7 +771,7 @@ async function doSync() {
     const r = await api('GET', '/api/sheet?url=' + encodeURIComponent(S.sheet.url) + (S.sheet.gid ? '&gid=' + encodeURIComponent(S.sheet.gid) : ''));
     if (!r.ok) throw new Error(r.json?.error || 'Erreur serveur');
     const raw = sheetRecords(csvParse(r.json.csv)); buildPreview(raw); syncP.raw = raw;
-  } catch (e) { syncP = null; await dlg({ title: 'Synchronisation impossible', msg: e.message, cancel: null, icon: 'warn' }); }
+  } catch (e) { syncP = null; await dlg({ title: 'Synchronisation impossible', msg: e.message + (admin ? '\n\nPour voir le détail de chaque étape, ouvre la page diagnostic.php de ton site.' : ''), cancel: null, icon: 'warn' }); }
   render();
 }
 function applySync() {
@@ -800,9 +806,9 @@ function previewHtml() {
 let mq = '';
 function vMed(part) {
   const ed = can('medalEdit'), list = byGrade(actv()).filter(a => !mq || norm(full(a) + ' ' + a.mat + ' ' + a.grade).includes(norm(mq)));
-  const due = []; actv().forEach(a => S.medals.forEach(md => { const s = medState(a, md); if (md.months && s.earned && !s.given) due.push({ a, md, s }); }));
+  const due = []; actv().forEach(a => S.medals.forEach(md => { const s = medState(a, md); if (md.n && s.earned && !s.given) due.push({ a, md, s }); }));
   due.sort((p, q) => p.s.earned.localeCompare(q.s.earned));
-  const manual = S.medals.filter(m => !m.months);
+  const manual = S.medals.filter(m => !m.n);
   const syncPanel = can('sheetSync') ? `<section class="panel"><div class="ph"><h2>Synchronisation Google Sheet</h2><span class="note">${S.sheet.last ? 'Dernière synchro : ' + new Date(S.sheet.last).toLocaleString('fr-FR') : 'Jamais synchronisé'}</span></div>
     <p class="note">Met à jour les agents (création, grade, matricule, date d’arrivée) et archive ceux qui ne sont plus dans le district. Un aperçu s’affiche avant d’appliquer. Le Sheet doit être partagé « Tous les utilisateurs disposant du lien ».</p>
     <div class="frm"><input id="murl" data-a="murl" style="flex:1" placeholder="Lien du Google Sheet (https://docs.google.com/spreadsheets/d/…)" value="${esc(S.sheet.url || '')}"><input data-a="mgid" style="width:150px" placeholder="gid de l’onglet (option.)" value="${esc(S.sheet.gid || '')}" title="Numéro après « gid= » dans l’adresse quand l’onglet est ouvert"><input data-a="mdist" style="width:170px" placeholder="District" value="${esc(S.sheet.district || '')}" title="Seuls les agents de ce district sont pris en compte"><button class="btn gold" id="msync" data-a="msync">Synchroniser</button></div>
@@ -811,12 +817,12 @@ function vMed(part) {
     due.map(({ a, md, s }) => `<tr><td>${esc(full(a))} ${badge(a.grade)}</td><td><span class="mrow">${medIcon(md)} ${esc(md.name)}</span></td><td class="mono">${fmtD(s.earned)}</td><td class="acts">${ed ? `<button class="btn ghost" data-a="mgive" data-id="${a.id}" data-m="${md.id}">Remis ✓</button>` : ''}</td></tr>`).join('') + `</tbody></table></div>` : '<p class="note">Aucun ruban en attente de remise.</p>') + `</section>`;
   const cat = `<section class="panel"><div class="ph"><h2>Médailles & rubans</h2><span class="note">Rubans : attribués automatiquement selon l’ancienneté (date d’arrivée). Médailles : attribuées à la main.</span></div><div class="mcat">` +
     S.medals.map(md => { const n = actv().filter(a => medState(a, md).earned).length; return `<div class="mcard2">${medIcon(md, 'big')}<div class="mci">${ed ? `<input data-a="mname" data-id="${md.id}" value="${esc(md.name)}">` : `<b>${esc(md.name)}</b>`}
-      <div class="frm">${ed ? `<select data-a="mtype" data-id="${md.id}"><option value="0" ${md.months ? '' : 'selected'}>Attribution manuelle</option>${[1, 2, 3, 4, 6, 8, 9, 10, 12, 18, 24, 36].map(m => `<option value="${m}" ${md.months === m ? 'selected' : ''}>Ancienneté ${m} mois</option>`).join('')}</select>` : `<span class="note">${md.months ? `Ancienneté ${md.months} mois` : 'Attribution manuelle'}</span>`}<span class="note">${n} agent(s)</span></div>
+      <div class="frm">${ed ? `<select data-a="mauto" data-id="${md.id}"><option value="0" ${md.n ? '' : 'selected'}>Attribution manuelle</option><option value="1" ${md.n ? 'selected' : ''}>Ancienneté</option></select>${md.n ? `<input type="number" min="1" class="mdn" data-a="mn" data-id="${md.id}" value="${md.n}"><select data-a="mu" data-id="${md.id}">${uOpts(md.u || 'm')}</select>` : ''}` : `<span class="note">${md.n ? `Ancienneté ${durTxt(md)}` : 'Attribution manuelle'}</span>`}<span class="note">${n} agent(s)</span></div>
       ${ed ? `<div class="frm">${md.img ? '' : `<input type="color" class="col" data-a="mcolor" data-id="${md.id}" value="${md.color || '#b8a47c'}" title="Couleur (sans image)">`}<label class="btn ghost">${md.img ? 'Changer l’image' : 'Image…'}<input type="file" accept="image/*" data-a="mimg" data-id="${md.id}" hidden></label>${md.img ? `<button class="btn ghost" data-a="mimgdel" data-id="${md.id}">Retirer l’image</button>` : ''}<button class="btn del" data-a="mdel" data-id="${md.id}">Supprimer</button></div>` : ''}</div></div>`; }).join('') + `</div>` +
-    (ed ? `<div class="frm" style="margin-top:12px"><input id="mnn" placeholder="Nouvelle médaille (ex : Médaille du mérite)"><select id="mnt"><option value="0">Attribution manuelle</option>${[1, 2, 3, 4, 6, 8, 9, 10, 12, 18, 24, 36].map(m => `<option value="${m}">Ancienneté ${m} mois</option>`).join('')}</select><button class="btn gold" data-a="madd">Ajouter</button></div>` : '') + `</section>`;
+    (ed ? `<div class="frm" style="margin-top:12px"><input id="mnn" placeholder="Nouvelle médaille (ex : Médaille du mérite)"><select id="mnt"><option value="0">Attribution manuelle</option><option value="1">Ancienneté</option></select><input id="mnn2" type="number" min="1" class="mdn" placeholder="Durée" title="Durée d’ancienneté"><select id="mnu">${uOpts('m')}</select><button class="btn gold" data-a="madd">Ajouter</button></div>` : '') + `</section>`;
   const tbl = `<section class="panel"><div class="ph"><h2>Agents</h2><input id="mq" placeholder="Rechercher…" value="${esc(mq)}" style="width:260px"></div><div class="wrapt"><table><thead><tr><th>Agent</th><th>Arrivée</th><th>Ancienneté</th><th>Médailles & rubans</th><th>Prochain ruban</th>${ed && manual.length ? '<th>Attribuer</th>' : ''}</tr></thead><tbody id="mtb">` +
-    list.map(a => { const nx = S.medals.filter(m => m.months).map(md => ({ md, s: medState(a, md) })).filter(o => o.s.due && !o.s.earned).sort((p, q) => p.s.due.localeCompare(q.s.due))[0];
-      return `<tr><td>${esc(full(a))} ${badge(a.grade)}</td><td>${ed ? `<input type="date" class="cin" data-a="marr" data-id="${a.id}" value="${a.arr || ''}">` : fmtD(a.arr)}</td><td class="mono">${anc(a.arr)}</td><td><span class="mrow">${medRow(a)}${ed ? agentMedals(a).filter(o => !o.md.months).map(o => `<button class="mx" data-a="munaward" data-id="${a.id}" data-m="${o.md.id}" title="Retirer « ${esc(o.md.name)} »">✕</button>`).join('') : ''}</span></td>
+    list.map(a => { const nx = S.medals.filter(m => m.n).map(md => ({ md, s: medState(a, md) })).filter(o => o.s.due && !o.s.earned).sort((p, q) => p.s.due.localeCompare(q.s.due))[0];
+      return `<tr><td>${esc(full(a))} ${badge(a.grade)}</td><td>${ed ? `<input type="date" class="cin" data-a="marr" data-id="${a.id}" value="${a.arr || ''}">` : fmtD(a.arr)}</td><td class="mono">${anc(a.arr)}</td><td><span class="mrow">${medRow(a)}${ed ? agentMedals(a).filter(o => !o.md.n).map(o => `<button class="mx" data-a="munaward" data-id="${a.id}" data-m="${o.md.id}" title="Retirer « ${esc(o.md.name)} »">✕</button>`).join('') : ''}</span></td>
         <td>${nx ? `<span class="mrow">${medIcon(nx.md, 'sm')} <span class="note">dans ${daysUntil(nx.s.due)} j (${fmtD(nx.s.due)})</span></span>` : a.arr ? '<span class="note">tous obtenus</span>' : '<span class="note">date d’arrivée inconnue</span>'}</td>
         ${ed && manual.length ? `<td><select class="cin" data-a="maward" data-id="${a.id}"><option value="">+ Médaille…</option>${manual.filter(m => !medState(a, m).earned).map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></td>` : ''}</tr>`; }).join('') + `</tbody></table></div>${list.length ? '' : '<p class="note">Aucun agent.</p>'}</section>`;
   return part === 'admin' ? syncPanel + cat : dueP + tbl;
@@ -839,8 +845,8 @@ document.addEventListener('click', async e => {
   else if (act === 'mcancel') { syncP = null; render(); }
   else if (act === 'mapply') { const n = syncP.items.filter(i => i.on && i.k !== 'quiet').length; if (await dlg({ title: 'Appliquer la synchronisation', msg: `Appliquer ${n} changement(s) ?`, ok: 'Appliquer', icon: 'warn' })) { applySync(); await dlg({ title: 'Synchronisation terminée', msg: `${n} changement(s) appliqué(s).`, cancel: null, icon: 'info' }); } }
   else if (act === 'mgive') { aw(id, el.dataset.m).given = Date.now(); upd(); }
-  else if (act === 'mgiveall') { if (await dlg({ title: 'Rubans remis', msg: 'Marquer tous les rubans en attente comme remis ?', ok: 'Confirmer' })) { actv().forEach(a => S.medals.forEach(md => { const s = medState(a, md); if (md.months && s.earned && !s.given) aw(a.id, md.id).given = Date.now(); })); upd(); } }
-  else if (act === 'madd') { const n = $('#mnn').value.trim(); if (!n) return; const m = +$('#mnt').value; S.medals.push({ id: uid() + uid(), name: n, months: m || null, color: RIB_COLORS[S.medals.length % RIB_COLORS.length], img: '' }); upd(); }
+  else if (act === 'mgiveall') { if (await dlg({ title: 'Rubans remis', msg: 'Marquer tous les rubans en attente comme remis ?', ok: 'Confirmer' })) { actv().forEach(a => S.medals.forEach(md => { const s = medState(a, md); if (md.n && s.earned && !s.given) aw(a.id, md.id).given = Date.now(); })); upd(); } }
+  else if (act === 'madd') { const n = $('#mnn').value.trim(); if (!n) return; const auto = $('#mnt').value === '1', dn = Math.round(+$('#mnn2').value); if (auto && !(dn > 0)) { await dlg({ title: 'Durée manquante', msg: 'Indique la durée d’ancienneté (nombre supérieur à 0).', cancel: null, icon: 'warn' }); return; } S.medals.push({ id: uid() + uid(), name: n, ...(auto ? { n: dn, u: $('#mnu').value } : {}), color: RIB_COLORS[S.medals.length % RIB_COLORS.length], img: '' }); upd(); }
   else if (act === 'mdel') { const md = S.medals.find(x => x.id === id); if (md && await dlg({ title: 'Supprimer', msg: `Supprimer « ${md.name} » ? Les attributions de cette médaille seront perdues.`, ok: 'Supprimer', danger: true })) { S.medals = S.medals.filter(x => x !== md); Object.values(S.awards || {}).forEach(o => delete o[id]); upd(); } }
   else if (act === 'mimgdel') { S.medals.find(x => x.id === id).img = ''; upd(); }
   else if (act === 'munaward') { const md = S.medals.find(x => x.id === el.dataset.m); if (await dlg({ title: 'Retirer la médaille', msg: `Retirer « ${md?.name} » à cet agent ?`, ok: 'Retirer', danger: true })) { delete S.awards?.[id]?.[el.dataset.m]; upd(); } }
@@ -848,8 +854,8 @@ document.addEventListener('click', async e => {
 document.addEventListener('change', async e => {
   const el = e.target, act = el.dataset.a, id = el.dataset.id; if (!act || !/^m/.test(act)) return;
   if (['murl', 'mgid', 'mdist', 'mgmap', 'mchk'].includes(act) && !can('sheetSync')) return;
-  if (['mname', 'mtype', 'mcolor', 'mimg', 'marr', 'maward'].includes(act) && !can('medalEdit')) return;
-  if (act === 'murl') { S.sheet.url = el.value.trim(); save(); }
+  if (['mname', 'mauto', 'mn', 'mu', 'mcolor', 'mimg', 'marr', 'maward'].includes(act) && !can('medalEdit')) return;
+  if (act === 'murl') { S.sheet.url = el.value.trim(); const g = (S.sheet.url.match(/[#&?]gid=(\d+)/) || [])[1]; if (g) S.sheet.gid = g; upd(); }
   else if (act === 'mgid') { S.sheet.gid = el.value.trim().replace(/\D/g, ''); save(); }
   else if (act === 'mdist') { S.sheet.district = el.value.trim(); save(); }
   else if (act === 'mchk') { syncP.items[+el.dataset.i].on = el.checked; }
@@ -860,7 +866,9 @@ document.addEventListener('change', async e => {
     save(); try { buildPreview(syncP.raw); } catch (x) {} render();
   }
   else if (act === 'mname') { const md = S.medals.find(x => x.id === id); if (el.value.trim()) md.name = el.value.trim(); upd(); }
-  else if (act === 'mtype') { S.medals.find(x => x.id === id).months = +el.value || null; upd(); }
+  else if (act === 'mauto') { const md = S.medals.find(x => x.id === id); if (el.value === '1') { md.n = md.n || 1; md.u = md.u || 'm'; } else { delete md.n; delete md.u; } upd(); }
+  else if (act === 'mn') { const v = Math.round(+el.value); if (v > 0) { S.medals.find(x => x.id === id).n = v; upd(); } else render(); }
+  else if (act === 'mu') { S.medals.find(x => x.id === id).u = el.value; upd(); }
   else if (act === 'mcolor') { S.medals.find(x => x.id === id).color = el.value; upd(); }
   else if (act === 'mimg') { const f = el.files[0]; if (!f) return; try { S.medals.find(x => x.id === id).img = await medImg(f); upd(); } catch (x) { await dlg({ title: 'Image illisible', msg: 'Ce fichier n’est pas une image valide.', cancel: null, icon: 'warn' }); } }
   else if (act === 'marr') { const a = S.agents.find(x => x.id === id); a.arr = el.value || undefined; upd(); }

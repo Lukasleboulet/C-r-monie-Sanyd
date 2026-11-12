@@ -59,8 +59,11 @@ Onglet **Statistiques** : choisis un agent → total / moyenne sur la **période
 Onglet **Médailles** :
 - **Synchronisation Google Sheet** (permission « Synchro Google Sheet ») : colle le lien du Sheet (partagé « Tous les utilisateurs disposant du lien »), le district (« Sandy Shore »), puis **Synchroniser**. Un aperçu liste les agents à créer, les grades / matricules / dates d'arrivée à mettre à jour et les agents à archiver (absents du Sheet ou d'un autre district) ; décoche ce que tu ne veux pas, puis **Appliquer**. Les rangs masqués (Patron, Sheriff) sont ignorés. Les grades du Sheet sont reconnus automatiquement (« Officier II » = « Officier-2 »…) ; sinon l'aperçu te demande la correspondance.
 - **Date d'arrivée** = la plus ancienne des dates des colonnes de grades (Rookie, Officier…). Modifiable à la main.
-- **Rubans de service** : 2, 4, 6, 8, 10 et 12 mois d'ancienneté, attribués automatiquement ; liste « Rubans à remettre » avec bouton « Remis ».
+- **Rubans de service** : 2, 4, 6, 8, 10 et 12 mois d'ancienneté par défaut, attribués automatiquement ; la durée de chaque ruban / médaille est modifiable (nombre + jours, semaines, mois ou ans) ; liste « Rubans à remettre » avec bouton « Remis ».
 - **Médailles** : ajoute / supprime des médailles, avec une image (redimensionnée automatiquement) ou une couleur ; attribution manuelle ou à l'ancienneté.
+
+### Si la synchro ne marche pas
+Connecte-toi en administrateur puis ouvre **`https://TON-SITE/diagnostic.php`** : la page teste chaque étape (accès à Google, partage du Sheet, onglet, ligne d'en-tête, nombre d'agents par district) et dit quoi corriger.
 
 ## Données et sauvegarde
 - `data/db.json` : toutes les données (**à sauvegarder régulièrement**) · `data/secret.key` : clé des sessions (ne pas partager).

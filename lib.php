@@ -9,7 +9,7 @@ const DATA_GUARD = "<?php http_response_code(404); exit; ?>\n"; // empêche la l
 const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set'];
 const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'cerEditDone', 'gradeEdit', 'actionEdit', 'sanctionEdit', 'usersManage', 'medalEdit', 'sheetSync', 'dataBackup', 'dataReset'];
 const BUILTIN = ['admin', 'user', 'pending'];
-const JF = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+const JF = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE;
 
 $ROOT = __DIR__; $DATA = $ROOT . '/data';
 $CONFIG = ['baseUrl' => '', 'discordClientId' => '', 'discordClientSecret' => '', 'passwordLogin' => false];
