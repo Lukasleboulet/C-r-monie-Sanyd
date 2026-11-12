@@ -56,16 +56,26 @@ const sym = x => x.to !== undefined ? '◆' : x.mv < 0 ? '▲' : x.mv > 0 ? '▼
 const effOpts = sel => [['-2', 'Monte de 2 grades'], ['-1', 'Monte d’un grade'], ['0', 'Aucun changement de grade'], ['1', 'Descend d’un grade'], ['2', 'Descend de 2 grades'], ['fix', 'Passe à un grade précis…']].map(([v, t]) => `<option value="${v}" ${v === String(sel) ? 'selected' : ''}>${t}</option>`).join('');
 const full = a => `${a.prenom} ${a.nom}`.trim();
 const tot = a => a.w.reduce((x, y) => x + (y || 0), 0);
-const sorted = () => [...S.agents].sort((a, b) => gi(a.grade) - gi(b.grade) || a.nom.localeCompare(b.nom));
+const actv = () => S.agents.filter(a => !a.arch); // agents en service (hors archivés)
+const byGrade = L => [...L].sort((a, b) => gi(a.grade) - gi(b.grade) || a.nom.localeCompare(b.nom));
+const sorted = () => byGrade(actv());
 const gopts = sel => [...new Set([...S.grades, ...S.agents.map(a => a.grade)])].map(g => `<option ${g === sel ? 'selected' : ''}>${esc(g)}</option>`).join('');
 const wopts = sel => S.weeks.map((w, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>Semaine du ${w}</option>`).join('');
 
 // ---------- vues ----------
+const archDate = a => new Date(a.arch.t).toLocaleDateString('fr-FR');
+function archHtml() {
+  const q = norm(flt.q), L = byGrade(S.agents.filter(a => a.arch)).filter(a => (!flt.g || a.grade === flt.g) && (!q || norm(full(a) + ' ' + a.mat).includes(q)));
+  return `<div class="wrapt"><table><thead><tr><th>Matricule</th><th>Agent</th><th>Grade</th><th>Archivé le</th><th>Raison</th><th>Total heures</th><th></th></tr></thead><tbody>` +
+    L.map(a => `<tr class="arch"><td class="mono">${esc(a.mat)}</td><td><span class="av">${esc(initials(a))}</span>${esc(full(a))}</td><td>${badge(a.grade)}</td><td>${archDate(a)}${a.arch.w != null && S.weeks[a.arch.w] ? ` <span class="note">(sem. du ${S.weeks[a.arch.w]})</span>` : ''}</td><td>${esc(a.arch.why || '—')}</td><td class="hcell">${F(tot(a))}</td><td class="acts">${can('agentDel') ? `<button class="btn ghost" data-a="unarch" data-id="${a.id}">Réintégrer</button><button class="btn del" data-a="del" data-id="${a.id}">Supprimer</button>` : ''}</td></tr>`).join('') +
+    `</tbody></table></div>` + (L.length ? '<p class="note">Les agents archivés n’apparaissent plus dans les heures, la cérémonie ni les totaux, mais leurs statistiques restent consultables (onglet Statistiques › « Archivés »).</p>' : '<p class="note">Aucun agent archivé.</p>');
+}
 function listHtml() {
+  if (flt.arch) return archHtml();
   const q = norm(flt.q), wi = flt.w ?? S.weeks.length - 1;
   const L = sorted().filter(a => (!flt.g || a.grade === flt.g) && (!q || norm(full(a) + ' ' + a.mat).includes(q)));
   return `<div class="wrapt"><table><thead><tr><th>Matricule</th><th>Agent</th><th>Grade</th><th>Heures (semaine du ${S.weeks[wi]})</th><th></th></tr></thead><tbody>` +
-    L.map(a => `<tr><td class="mono">${can('agentEdit') ? `<input class="ein" data-a="emat" data-id="${a.id}" value="${esc(a.mat)}">` : esc(a.mat)}</td><td>${can('agentEdit') ? `<input class="ein" data-a="epre" data-id="${a.id}" value="${esc(a.prenom)}" placeholder="Prénom"> <input class="ein" data-a="enom" data-id="${a.id}" value="${esc(a.nom)}" placeholder="Nom">` : `<span class="av">${esc(((a.prenom || '')[0] || '') + ((a.nom || '')[0] || ''))}</span>${esc(full(a))}`}</td><td>${can('agentEdit') ? `<select class="ein" data-a="egr" data-id="${a.id}">${gopts(a.grade)}</select>` : badge(a.grade)}</td><td class="hcell">${F(a.w[wi])}<span class="mini"><i style="width:${Math.min(100, (a.w[wi] || 0) / BAR_MAX * 100)}%"></i></span></td><td>${can('agentDel') ? `<button class="btn del" data-a="del" data-id="${a.id}">Retirer</button>` : ''}</td></tr>`).join('') +
+    L.map(a => `<tr><td class="mono">${can('agentEdit') ? `<input class="ein" data-a="emat" data-id="${a.id}" value="${esc(a.mat)}">` : esc(a.mat)}</td><td>${can('agentEdit') ? `<input class="ein" data-a="epre" data-id="${a.id}" value="${esc(a.prenom)}" placeholder="Prénom"> <input class="ein" data-a="enom" data-id="${a.id}" value="${esc(a.nom)}" placeholder="Nom">` : `<span class="av">${esc(((a.prenom || '')[0] || '') + ((a.nom || '')[0] || ''))}</span>${esc(full(a))}`}</td><td>${can('agentEdit') ? `<select class="ein" data-a="egr" data-id="${a.id}">${gopts(a.grade)}</select>` : badge(a.grade)}</td><td class="hcell">${F(a.w[wi])}<span class="mini"><i style="width:${Math.min(100, (a.w[wi] || 0) / BAR_MAX * 100)}%"></i></span></td><td>${can('agentDel') ? `<button class="btn ghost" data-a="arch" data-id="${a.id}" title="Retirer de l’effectif en gardant ses statistiques">Archiver</button>` : ''}</td></tr>`).join('') +
     `</tbody></table></div>` + (L.length ? '' : '<p class="note">Aucun agent.</p>');
 }
 function vEff() {
@@ -73,7 +83,7 @@ function vEff() {
     <input id="n-mat" placeholder="Matricule"><input id="n-pre" placeholder="Prénom"><input id="n-nom" placeholder="Nom">
     <select id="n-gr">${gopts(S.grades.at(-1))}</select><button class="btn gold" data-a="add">Ajouter</button></div></section>` : '') + `
     <div class="frm"><input id="q" placeholder="Rechercher (nom, matricule)…" value="${esc(flt.q)}">
-    <select id="fg"><option value="">Tous les grades</option>${gopts(flt.g)}</select><select id="ew">${wopts(flt.w ?? S.weeks.length - 1)}</select><span class="note">${S.agents.length} agents</span></div>
+    <select id="fg"><option value="">Tous les grades</option>${gopts(flt.g)}</select><select id="ew">${wopts(flt.w ?? S.weeks.length - 1)}</select><span class="note">${actv().length} agents</span>${S.agents.some(a => a.arch) || flt.arch ? `<button class="btn ghost${flt.arch ? ' on' : ''}" data-a="sharch">${flt.arch ? '← Effectif en service' : `Archivés (${S.agents.filter(a => a.arch).length})`}</button>` : ''}</div>
     <div id="list">${listHtml()}</div>`;
 }
 function vHrs() {
@@ -83,7 +93,7 @@ function vHrs() {
     sorted().map(a => `<tr><td>${esc(full(a))}<small>${esc(a.mat)} · ${esc(a.grade)}</small></td>` +
       S.weeks.map((_, j) => `<td class="c${can('hoursEdit') ? '' : ' ro'}" ${can('hoursEdit') ? 'data-a="cell"' : ''} data-id="${a.id}" data-j="${j}" style="background:rgba(232,135,58,${a.w[j] == null ? 0 : Math.min(.55, a.w[j] / 5400)})">${F(a.w[j])}</td>`).join('') +
       `<td><b>${F(tot(a))}</b></td></tr>`).join('') + `</tbody></table></div>`;
-  const t = S.agents.reduce((x, a) => x + (a.w[hw] || 0), 0);
+  const t = actv().reduce((x, a) => x + (a.w[hw] || 0), 0);
   return bar + `<p class="note">Semaine du ${S.weeks[hw]} · total : <b id="ht">${F(t)}</b> · saisis les heures (12h30, 12:30 ou 12.5) puis Entrée ou Tab.</p><div class="wrapt"><table><thead><tr><th>Agent</th><th>Grade</th><th>Heures</th></tr></thead><tbody>` +
     sorted().map(a => `<tr><td>${esc(full(a))}<small>${esc(a.mat)}</small></td><td>${badge(a.grade)}</td><td><input class="hin" data-a="hin" data-id="${a.id}" value="${a.w[hw] == null ? '' : F(a.w[hw])}" placeholder="0h00" ${can('hoursEdit') ? '' : 'readonly'}></td></tr>`).join('') + `</tbody></table></div>`;
 }
@@ -128,7 +138,7 @@ function vCer() {
   ${can('cerValidate') ? '<button class="btn" data-a="apply">Valider : appliquer les changements de grade</button>' : ''}</div></section>`;
 }
 function recap() {
-  const D = S.ceremonies[S.weeks[cw]] || {}, L = S.agents.filter(a => D[a.id]?.a);
+  const D = S.ceremonies[S.weeks[cw]] || {}, L = actv().filter(a => D[a.id]?.a);
   const blocks = S.actions.map(x => {
     const r = L.filter(a => D[a.id].a === x.id).map(a => `• ${full(a)} (${a.mat}) : ${D[a.id].from || a.grade} → ${D[a.id].g || a.grade} — ${D[a.id].r || 'sans raison'}`);
     return r.length ? `${sym(x)} ${x.label.toUpperCase()}\n${r.join('\n')}` : '';
@@ -159,11 +169,11 @@ function render() {
   document.querySelectorAll('#nav button[data-t]').forEach(b => { b.hidden = !canTab(b.dataset.t); b.classList.toggle('on', b.dataset.t === tab); });
   $('#gadm').hidden = $('#nav [data-t="set"]').hidden;
   $('#pt').textContent = tab ? TITLES[tab] : 'Accès restreint';
-  $('#psub').textContent = tab ? (tab === 'eff' ? `${S.agents.length} agent(s) · ` : '') + TSUB[tab] : 'Aucun onglet n’est autorisé pour ton rôle.';
+  $('#psub').textContent = tab ? (tab === 'eff' ? `${actv().length} agent(s) en service · ` : '') + TSUB[tab] : 'Aucun onglet n’est autorisé pour ton rôle.';
   $('#pic').innerHTML = tab ? `<svg viewBox="0 0 24 24">${TICON[tab]}</svg>` : '';
-  const kw = [...S.weeks.keys()].reverse().find(j => S.agents.some(a => a.w[j] > 0)) ?? S.weeks.length - 1;
-  const hs = S.agents.map(a => a.w[kw]).filter(x => x != null), act = hs.filter(x => x > 0), tt = hs.reduce((x, y) => x + y, 0);
-  $('#kpi').innerHTML = !tab ? '' : [[S.agents.length, 'Agents'], [F(tt), `Heures · sem. du ${S.weeks[kw]}`], [act.length, 'Agents actifs'], [F(act.length ? Math.round(tt / act.length) : 0), 'Moyenne / actif']]
+  const kw = [...S.weeks.keys()].reverse().find(j => actv().some(a => a.w[j] > 0)) ?? S.weeks.length - 1;
+  const hs = actv().map(a => a.w[kw]).filter(x => x != null), act = hs.filter(x => x > 0), tt = hs.reduce((x, y) => x + y, 0);
+  $('#kpi').innerHTML = !tab ? '' : [[actv().length, 'Agents'], [F(tt), `Heures · sem. du ${S.weeks[kw]}`], [act.length, 'Agents actifs'], [F(act.length ? Math.round(tt / act.length) : 0), 'Moyenne / actif']]
     .map(([b, l], i) => `<div class="kpi k${i}"><span>${l}</span><b>${b}</b></div>`).join('');
   $('#view').innerHTML = tab ? views[tab]() : me?.role === 'pending'
     ? `<section class="panel"><h2>Compte en attente de validation</h2><p class="note">Tu es connecté avec Discord, mais aucun rôle ne t’a encore été attribué. Communique ton ID Discord à un administrateur : <b class="mono">${esc(me.discordId || '')}</b></p></section>`
@@ -222,7 +232,7 @@ function parseLine(line) {
 function doImport() {
   const wi = +$('#iw').value, upG = $('#ig')?.checked; let ok = 0, cr = 0, gch = 0; const unk = [], badG = new Set();
   const findG = g => g ? S.grades.find(x => norm(x) === norm(g)) : null;
-  const newG = [], low = S.grades.at(-1); // grade par défaut des agents créés sans rang connu
+  const newG = [], archHit = [], low = S.grades.at(-1); // grade par défaut des agents créés sans rang connu
   if ($('#icg')?.checked && can('gradeEdit')) { // créer les rangs inconnus, placés selon l'ordre du tableau collé (trié du plus haut au plus bas)
     const seq = []; for (const line of $('#it').value.split('\n')) { const L = line.trim() && parseLine(line); if (L && L.grade && !seq.some(x => norm(x) === norm(L.grade))) seq.push(L.grade); }
     seq.forEach((g, i) => {
@@ -239,7 +249,7 @@ function doImport() {
     if (!b) for (const a of S.agents) { const n = norm(full(a)); if (n && nl.includes(n) && (!b || n.length > norm(full(b)).length)) b = a; }
     const g = findG(L.grade); if (L.grade && !g) badG.add(L.grade);
     if (b) {
-      b.w[wi] = L.mins; ok++;
+      b.w[wi] = L.mins; ok++; if (b.arch) archHit.push(full(b));
       if (upG && g && g !== b.grade) { logGrade(b, b.grade, g, 'import'); b.grade = g; gch++; }
       continue;
     }
@@ -249,7 +259,7 @@ function doImport() {
     } else unk.push(L.name || line.trim());
   }
   save();
-  $('#ir').innerHTML = `<b>${ok}</b> mis à jour (semaine du ${S.weeks[wi]})${cr ? `, <b>${cr}</b> créé(s)` : ''}${gch ? `, <b>${gch}</b> grade(s) modifié(s)` : ''}.` + (newG.length ? `<br>Grade(s) créé(s) : <b>${newG.map(esc).join(', ')}</b> — vérifie leur place dans Paramètres › Grades.` : '') +
+  $('#ir').innerHTML = `<b>${ok}</b> mis à jour (semaine du ${S.weeks[wi]})${cr ? `, <b>${cr}</b> créé(s)` : ''}${gch ? `, <b>${gch}</b> grade(s) modifié(s)` : ''}.` + (archHit.length ? `<br>Agent(s) archivé(s) présents dans la liste (heures enregistrées, toujours archivés) : ${archHit.map(esc).join(', ')}` : '') + (newG.length ? `<br>Grade(s) créé(s) : <b>${newG.map(esc).join(', ')}</b> — vérifie leur place dans Paramètres › Grades.` : '') +
     (unk.length ? `<br>Non reconnus (coche « Créer les agents inconnus » pour les ajouter) : ${unk.map(esc).join(', ')}` : '') +
     (badG.size ? `<br>Rangs absents de la liste des grades (ignorés${$('#ic').checked ? ` ; agents créés en ${esc(low)}` : ''}) : ${[...badG].map(esc).join(', ')} — ajoute-les dans Paramètres › Grades si besoin.` : '');
 }
@@ -272,7 +282,7 @@ document.addEventListener('click', async e => {
   const act = el.dataset.a, id = el.dataset.id;
   if (['radd', 'rdel', 'rall'].includes(act) && !admin) return;
   if (['udel', 'uadd', 'upw'].includes(act) && !mgr()) return;
-  if (act === 'del' && !can('agentDel')) return;
+  if (['del', 'arch', 'unarch'].includes(act) && !can('agentDel')) return;
   if (act === 'add' && !can('agentAdd')) return;
   if (act === 'cell' && !can('hoursEdit')) return;
   if (act === 'import' && !can('hoursImport')) return;
@@ -286,8 +296,16 @@ document.addEventListener('click', async e => {
     { const na = { id: uid(), mat: $('#n-mat').value.trim() || '-', prenom: pre, nom, grade: $('#n-gr').value, w: S.weeks.map(() => null) }; S.agents.push(na); logGrade(na, null, na.grade, 'création'); } upd();
   } else if (act === 'del') {
     const a = S.agents.find(x => x.id === id);
-    if (a && await dlg({ title: 'Retirer l’agent', msg: `Retirer ${full(a)} (${a.mat}) et toutes ses heures ?`, ok: 'Retirer', danger: true })) { S.agents = S.agents.filter(x => x !== a); upd(); }
-  } else if (act === 'week') addWeek();
+    if (a && await dlg({ title: 'Supprimer définitivement', msg: `Supprimer ${full(a)} (${a.mat}) avec toutes ses heures et son historique ? Cette action est irréversible.`, ok: 'Supprimer', danger: true })) { S.agents = S.agents.filter(x => x !== a); upd(); }
+  } else if (act === 'arch') {
+    const a = S.agents.find(x => x.id === id); if (!a) return;
+    const why = await dlg({ title: 'Archiver l’agent', msg: `${full(a)} sera retiré de l’effectif, des heures et de la cérémonie. Ses statistiques restent consultables et tu pourras le réintégrer.\n\nRaison (facultatif) :`, input: '', ok: 'Archiver' });
+    if (why === null) return;
+    a.arch = { t: Date.now(), w: lastW(), why: why.trim() }; upd();
+  } else if (act === 'unarch') {
+    const a = S.agents.find(x => x.id === id); if (a) { delete a.arch; upd(); }
+  } else if (act === 'sharch') { flt.arch = !flt.arch; render(); }
+  else if (act === 'starch') { st.arch = !st.arch; render(); } else if (act === 'week') addWeek();
   else if (act === 'cell') {
     const a = S.agents.find(x => x.id === id), j = +el.dataset.j;
     const v = await dlg({ title: full(a), msg: `Semaine du ${S.weeks[j]} · heures (ex : 12h30 — vide = aucune donnée)`, input: a.w[j] == null ? '' : F(a.w[j]), ok: 'Enregistrer' });
@@ -341,7 +359,7 @@ document.addEventListener('click', async e => {
   }
   else if (act === 'copy') { await navigator.clipboard.writeText(recap()); el.textContent = 'Copié ✓'; }
   else if (act === 'apply') {
-    const D = S.ceremonies[S.weeks[cw]] || {}, todo = S.agents.filter(a => D[a.id]?.a && !D[a.id].done);
+    const D = S.ceremonies[S.weeks[cw]] || {}, todo = actv().filter(a => D[a.id]?.a && !D[a.id].done);
     if (todo.length && await dlg({ title: 'Valider la cérémonie', msg: `Appliquer ${todo.length} changement(s) de grade aux agents concernés ?`, ok: 'Appliquer', icon: 'warn' })) {
       todo.forEach(a => { D[a.id].from = D[a.id].from || a.grade; a.grade = D[a.id].g || a.grade; D[a.id].done = true; }); upd();
     }
@@ -387,7 +405,7 @@ document.addEventListener('change', e => {
     const a = S.agents.find(x => x.id === el.dataset.id), v = el.value.trim(), n = v ? tparse(v, true) : null;
     if (v && n == null) { el.value = a.w[hw] == null ? '' : F(a.w[hw]); return; }
     a.w[hw] = n; el.value = n == null ? '' : F(n); save();
-    $('#ht').textContent = F(S.agents.reduce((x, y) => x + (y.w[hw] || 0), 0));
+    $('#ht').textContent = F(actv().reduce((x, y) => x + (y.w[hw] || 0), 0));
   } else if (act === 'gname') {
     const i = +el.dataset.i, old = S.grades[i], nv = el.value.trim();
     if (!nv || (nv !== old && S.grades.includes(nv))) { el.value = old; return; }
@@ -445,7 +463,7 @@ $('#rz').onclick = async () => { if (can('dataReset') && await dlg({ title: 'Ré
 // ---------- connexion & synchronisation avec le serveur (server.js) ----------
 const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'set'];
 const PERM_GROUPS = [
-  ['Agents', [['agentAdd', 'Créer'], ['agentEdit', 'Modifier'], ['agentDel', 'Retirer']]],
+  ['Agents', [['agentAdd', 'Créer'], ['agentEdit', 'Modifier'], ['agentDel', 'Archiver / suppr.']]],
   ['Heures', [['hoursEdit', 'Saisir'], ['hoursImport', 'Importer'], ['weekAdd', 'Ajouter semaine']]],
   ['Cérémonie', [['cerEdit', 'Préparer'], ['cerValidate', 'Valider'], ['cerEditDone', 'Modifier validée']]],
   ['Paramètres', [['gradeEdit', 'Grades'], ['actionEdit', 'Options décision'], ['sanctionEdit', 'Sanctions'], ['usersManage', 'Gérer comptes']]],
@@ -612,8 +630,8 @@ const aSt = (a, f, t) => { const v = a.w.slice(f, t + 1), k = v.filter(x => x !=
 const initials = a => ((a.prenom || '')[0] || '') + ((a.nom || '')[0] || '');
 const Fd = m => (m < 0 ? '−' : '+') + F(Math.abs(Math.round(m)));
 function aListHtml() {
-  const q = norm(st.q), L = sorted().filter(a => !q || norm(full(a) + ' ' + a.mat + ' ' + a.grade).includes(q)), lw = lastW();
-  return L.map(a => `<button type="button" class="ai${a.id === st.id ? ' on' : ''}" data-a="sagent" data-id="${a.id}" style="--c:${gradeColor(a.grade)}"><span class="av">${esc(initials(a))}</span><span class="ai-n"><b>${esc(full(a))}</b><span>${badge(a.grade)}${a.mat && a.mat !== '-' ? `<small class="mono">${esc(a.mat)}</small>` : ''}</span></span><span class="ai-h mono" title="Semaine du ${S.weeks[lw]}">${F(a.w[lw])}</span></button>`).join('') || '<p class="note">Aucun agent.</p>';
+  const q = norm(st.q), L = byGrade(st.arch ? S.agents.filter(a => a.arch) : actv()).filter(a => !q || norm(full(a) + ' ' + a.mat + ' ' + a.grade).includes(q)), lw = lastW();
+  return L.map(a => `<button type="button" class="ai${a.id === st.id ? ' on' : ''}" data-a="sagent" data-id="${a.id}" style="--c:${gradeColor(a.grade)}"><span class="av">${esc(initials(a))}</span><span class="ai-n"><b>${esc(full(a))}</b><span>${badge(a.grade)}${a.mat && a.mat !== '-' ? `<small class="mono">${esc(a.mat)}</small>` : ''}</span></span>${a.arch ? '<span class="tag">archivé</span>' : ''}<span class="ai-h mono" title="Semaine du ${S.weeks[lw]}">${F(a.w[lw])}</span></button>`).join('') || '<p class="note">Aucun agent.</p>';
 }
 function chartSvg(a, f, t, avg) {
   const n = t - f + 1, W = Math.max(1000, n * 46 + 70), H = 280, L = 52, R = 16, B = 34, T = 26, pw = W - L - R, ph = H - B - T, slot = pw / n, bw = Math.min(46, slot * .56);
@@ -638,8 +656,8 @@ function gradeHistory(a) { // changements de grade : création / modifications m
 }
 function staDetail(a) {
   const last = lastW(), f = Math.min(st.f ?? 0, last), t = Math.min(st.t ?? last, last), s = aSt(a, f, t), all = aSt(a, 0, last);
-  const pool = S.agents.map(x => ({ x, s: aSt(x, f, t) })).filter(o => o.s.n).sort((p, q) => q.s.avg - p.s.avg);
-  const rank = pool.findIndex(o => o.x.id === a.id) + 1, davg = pool.length ? pool.reduce((x, o) => x + o.s.avg, 0) / pool.length : 0, first = a.w.findIndex(x => x != null);
+  const pool = actv().map(x => ({ x, s: aSt(x, f, t) })).filter(o => o.s.n).sort((p, q) => q.s.avg - p.s.avg);
+  const rank = a.arch ? 0 : pool.findIndex(o => o.x.id === a.id) + 1, davg = pool.length ? pool.reduce((x, o) => x + o.s.avg, 0) / pool.length : 0, first = a.w.findIndex(x => x != null);
   const k = s.k, trend = k.length >= 6 ? k.slice(-3).reduce((x, y) => x + y, 0) / 3 - k.slice(-6, -3).reduce((x, y) => x + y, 0) / 3 : null;
   const big = (l, v, sub, cls = '') => `<div class="sk big ${cls}"><span>${l}</span><b>${v}</b>${sub ? `<em>${sub}</em>` : ''}</div>`;
   const card = (l, v, cls = '') => `<div class="sk ${cls}" title="${esc(l)}"><span>${l}</span><b>${v}</b></div>`;
@@ -649,7 +667,7 @@ function staDetail(a) {
   const wk = [...Array(n0).keys()].map(i => f + i).reverse();
   const preset = [[0, 'Tout'], [4, '4 sem.'], [8, '8 sem.'], [12, '12 sem.']].map(([nn, l]) => { const on = nn ? f === Math.max(0, last - nn + 1) && t === last && last - nn + 1 >= 0 : f === 0 && t === last; return `<button class="seg${on ? ' on' : ''}" data-a="sper" data-n="${nn}">${l}</button>`; }).join('');
   const chip = (l, v) => `<span class="chip"><small>${l}</small>${v}</span>`;
-  return `<section class="panel hero" style="--c:${gradeColor(a.grade)}"><div class="hero-l"><span class="av big">${esc(initials(a))}</span><div class="hero-id"><h2>${esc(full(a))}</h2><div class="sub-l">${badge(a.grade)}${a.mat && a.mat !== '-' ? `<span class="mono note">Matricule ${esc(a.mat)}</span>` : ''}</div>
+  return `<section class="panel hero" style="--c:${gradeColor(a.grade)}"><div class="hero-l"><span class="av big">${esc(initials(a))}</span><div class="hero-id"><h2>${esc(full(a))}</h2><div class="sub-l">${badge(a.grade)}${a.arch ? `<span class="tag">Archivé le ${archDate(a)}${a.arch.why ? ' · ' + esc(a.arch.why) : ''}</span>` : ''}${a.mat && a.mat !== '-' ? `<span class="mono note">Matricule ${esc(a.mat)}</span>` : ''}</div>
     <div class="chips">${chip('Premières heures', first < 0 ? '—' : 'sem. du ' + S.weeks[first])}${chip('Semaines suivies', all.n)}${chip('Total global', F(all.sum))}${chip('Moyenne globale', F(Math.round(all.avg)))}</div></div></div>
     <div class="hero-r"><small class="lbl">Période analysée</small><div class="segs">${preset}</div><div class="per"><select id="pf">${wopts(f)}</select><span class="note">→</span><select id="pe">${wopts(t)}</select></div></div></section>
   <div class="skg big3">${big('Total sur la période', F(s.sum), `${s.n} semaine(s) avec données`, 'hi')}${big('Moyenne / semaine', F(Math.round(s.avg)), s.n ? `district : ${F(Math.round(davg))}` : '', 'hi')}${big('Classement', rank ? `${rank}<small> / ${pool.length}</small>` : '–', 'à la moyenne sur la période')}</div>
@@ -666,7 +684,7 @@ function staDetail(a) {
 function vSta() {
   if (st.id && !S.agents.some(a => a.id === st.id)) st.id = null;
   const a = S.agents.find(x => x.id === st.id);
-  return `<div class="sgrid"><section class="panel sl"><div class="ph"><h2>Agents</h2><span class="note">${S.agents.length} · h. sem. ${S.weeks[lastW()]}</span></div><input id="sas" placeholder="Rechercher (nom, grade, matricule)…" value="${esc(st.q)}" autocomplete="off"><div class="alist" id="alist">${aListHtml()}</div></section>
+  return `<div class="sgrid"><section class="panel sl"><div class="ph"><h2>Agents</h2><span class="note">${(st.arch ? S.agents.filter(a => a.arch) : actv()).length} · h. sem. ${S.weeks[lastW()]}</span></div>${S.agents.some(a => a.arch) ? `<div class="segs" style="margin-bottom:10px"><button class="seg${st.arch ? '' : ' on'}" data-a="starch">En service</button><button class="seg${st.arch ? ' on' : ''}" data-a="starch">Archivés</button></div>` : ''}<input id="sas" placeholder="Rechercher (nom, grade, matricule)…" value="${esc(st.q)}" autocomplete="off"><div class="alist" id="alist">${aListHtml()}</div></section>
   <div class="sd">${a ? staDetail(a) : '<section class="panel"><h2>Sélectionne un agent</h2><p class="note">Choisis un agent dans la liste : tu verras toutes ses statistiques depuis le début du site — heures, moyennes sur la période de ton choix, changements de grade, sanctions et cérémonies.</p></section>'}</div></div>`;
 }
 

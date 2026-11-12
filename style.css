@@ -321,3 +321,7 @@ fieldset.ro .btn{display:none}
 td.pos{color:var(--green)}td.neg{color:var(--red)}span.ok{color:var(--green);font-weight:700}
 html.light .chip,html.light .segs{background:#fff6e6}html.light .ch-v{fill:#3a2815}
 @media(max-width:950px){.hero-r{align-items:flex-start}.alist{max-height:260px}.s2{grid-template-columns:1fr}}
+/* agents archivés */
+td.acts{display:flex;gap:8px;justify-content:flex-end}
+tr.arch td{color:var(--mute)}tr.arch .bdg{opacity:.7}
+.ai .tag{flex:none;font-size:.62rem}
