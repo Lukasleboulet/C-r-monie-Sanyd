@@ -41,6 +41,7 @@ function migrate(d) { // le grade « Rookie-PPA » n'existe pas : fusionné dans
   d.actions ||= DEFAULT_ACTIONS.map(x => ({ ...x }));
   d.gcol ||= {};
   d.glog ||= [];
+  d.ignRanks ||= ['Patron', 'Sheriff']; // rangs ignorés à l'import et masqués (sauf agents ajoutés à la main)
   d.sanctions ||= [...DEFAULT_SANCTIONS];
   Object.values(d.ceremonies || {}).forEach(c => Object.values(c).forEach(x => ['fps', 'f1020', 'fus', 'abs'].forEach(k => { if (k in x && typeof x[k] !== 'boolean') x[k] = !!x[k] && x[k] !== 'Non'; })));
   return d;
@@ -56,7 +57,9 @@ const sym = x => x.to !== undefined ? '◆' : x.mv < 0 ? '▲' : x.mv > 0 ? '▼
 const effOpts = sel => [['-2', 'Monte de 2 grades'], ['-1', 'Monte d’un grade'], ['0', 'Aucun changement de grade'], ['1', 'Descend d’un grade'], ['2', 'Descend de 2 grades'], ['fix', 'Passe à un grade précis…']].map(([v, t]) => `<option value="${v}" ${v === String(sel) ? 'selected' : ''}>${t}</option>`).join('');
 const full = a => `${a.prenom} ${a.nom}`.trim();
 const tot = a => a.w.reduce((x, y) => x + (y || 0), 0);
-const actv = () => S.agents.filter(a => !a.arch); // agents en service (hors archivés)
+const ignR = g => (S.ignRanks || []).some(x => norm(x) === norm(g || ''));
+const hiddenA = a => !a.man && ignR(a.grade); // rang masqué (Patron, Sheriff…) et agent non ajouté à la main
+const actv = () => S.agents.filter(a => !a.arch && !hiddenA(a)); // agents en service (hors archivés et rangs masqués)
 const byGrade = L => [...L].sort((a, b) => gi(a.grade) - gi(b.grade) || a.nom.localeCompare(b.nom));
 const sorted = () => byGrade(actv());
 const gopts = sel => [...new Set([...S.grades, ...S.agents.map(a => a.grade)])].map(g => `<option ${g === sel ? 'selected' : ''}>${esc(g)}</option>`).join('');
@@ -152,6 +155,9 @@ function vSet() {
   return `<section class="panel"><h2>Grades (du plus haut au plus bas)</h2>${can('gradeEdit') ? '' : '<p class="note">Lecture seule.</p>'}` + lockFs('gradeEdit', 
     S.grades.map((g, i) => `<div class="frm"><button class="btn ghost" data-a="gup" data-i="${i}" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost" data-a="gdn" data-i="${i}" ${i < S.grades.length - 1 ? '' : 'disabled'}>▼</button><input data-a="gname" data-i="${i}" value="${esc(g)}"><input type="color" class="col" data-a="gcol" data-i="${i}" value="${gradeColor(g)}" title="Couleur du grade"><button class="btn ghost" data-a="gcolr" data-i="${i}" title="Couleur par défaut">↺</button><span class="note">${S.agents.filter(a => a.grade === g).length} agent(s)</span><button class="btn del" data-a="gdel" data-i="${i}">Retirer</button></div>`).join('') +
     `<div class="frm"><input id="gn" placeholder="Nouveau grade (ajouté en bas, puis déplace-le avec ▲)"><button class="btn gold" data-a="gadd">Ajouter</button></div>`) + `</section>
+  <section class="panel"><h2>Rangs masqués</h2><p class="note">Les lignes de ces rangs sont ignorées à l’import (heures, création d’agent et de grade) et les agents de ces rangs n’apparaissent nulle part — sauf ceux que tu as ajoutés toi-même dans Effectifs. ${(() => { const n = S.agents.filter(hiddenA).length; return n ? `<b>${n}</b> agent(s) actuellement masqué(s).` : ''; })()}</p>` + lockFs('gradeEdit',
+    `<div class="frm">${(S.ignRanks || []).map((x, i) => `<span class="tag">${esc(x)} <button class="btn del mini-b" data-a="irdel" data-i="${i}" title="Ne plus masquer">✕</button></span>`).join('') || '<span class="note">Aucun rang masqué.</span>'}</div>
+    <div class="frm"><input id="irn" placeholder="Rang à masquer (ex : Patron)"><button class="btn gold" data-a="iradd">Ajouter</button></div>`) + `</section>
   <section class="panel"><h2>Options de décision (cérémonie)</h2><p class="note">Chaque option peut monter ou descendre d’un ou deux grades, ne rien changer, ou envoyer vers un grade précis (ex : Passe à SLO). Dans la cérémonie, le nouveau grade reste modifiable.</p>` + lockFs('actionEdit',
     S.actions.map((x, i) => `<div class="frm">${mvBtns('a', i, S.actions.length)}<input data-a="aname" data-id="${x.id}" value="${esc(x.label)}"><select data-a="aeff" data-id="${x.id}">${effOpts(x.to !== undefined ? 'fix' : x.mv)}</select>${x.to !== undefined ? `<select data-a="ato" data-id="${x.id}">${gopts(x.to)}</select>` : ''}<button class="btn del" data-a="adel" data-id="${x.id}">Retirer</button></div>`).join('') +
     `<div class="frm"><input id="an2" placeholder="Nouvelle option"><select id="ae">${effOpts(0)}</select><select id="at" hidden>${gopts(S.grades[0])}</select><button class="btn gold" data-a="aadd">Ajouter</button></div>`) + `</section>
@@ -232,11 +238,11 @@ function parseLine(line) {
 function doImport() {
   const wi = +$('#iw').value, upG = $('#ig')?.checked; let ok = 0, cr = 0, gch = 0; const unk = [], badG = new Set();
   const findG = g => g ? S.grades.find(x => norm(x) === norm(g)) : null;
-  const newG = [], archHit = [], low = S.grades.at(-1); // grade par défaut des agents créés sans rang connu
+  const newG = [], archHit = [], ignored = [], low = [...S.grades].reverse().find(g => !ignR(g)) || S.grades.at(-1); // grade par défaut des agents créés sans rang connu
   if ($('#icg')?.checked && can('gradeEdit')) { // créer les rangs inconnus, placés selon l'ordre du tableau collé (trié du plus haut au plus bas)
     const seq = []; for (const line of $('#it').value.split('\n')) { const L = line.trim() && parseLine(line); if (L && L.grade && !seq.some(x => norm(x) === norm(L.grade))) seq.push(L.grade); }
     seq.forEach((g, i) => {
-      if (findG(g)) return;
+      if (findG(g) || ignR(g)) return;
       const nxt = seq.slice(i + 1).map(findG).find(Boolean), prv = seq.slice(0, i).reverse().map(findG).find(Boolean);
       const at = nxt ? S.grades.indexOf(nxt) : prv ? S.grades.indexOf(prv) + 1 : S.grades.length;
       S.grades.splice(at, 0, g); newG.push(g);
@@ -247,6 +253,7 @@ function doImport() {
     const L = parseLine(line); if (!L || L.mins == null) continue;
     const nl = norm(L.name); let b = S.agents.find(a => norm(full(a)) === nl) || null; // nom exact d'abord
     if (!b) for (const a of S.agents) { const n = norm(full(a)); if (n && nl.includes(n) && (!b || n.length > norm(full(b)).length)) b = a; }
+    if (ignR(L.grade) && !(b && b.man)) { ignored.push(L.name); continue; } // Patron, Sheriff… : jamais importés (sauf agent ajouté à la main)
     const g = findG(L.grade); if (L.grade && !g) badG.add(L.grade);
     if (b) {
       b.w[wi] = L.mins; ok++; if (b.arch) archHit.push(full(b));
@@ -259,7 +266,7 @@ function doImport() {
     } else unk.push(L.name || line.trim());
   }
   save();
-  $('#ir').innerHTML = `<b>${ok}</b> mis à jour (semaine du ${S.weeks[wi]})${cr ? `, <b>${cr}</b> créé(s)` : ''}${gch ? `, <b>${gch}</b> grade(s) modifié(s)` : ''}.` + (archHit.length ? `<br>Agent(s) archivé(s) présents dans la liste (heures enregistrées, toujours archivés) : ${archHit.map(esc).join(', ')}` : '') + (newG.length ? `<br>Grade(s) créé(s) : <b>${newG.map(esc).join(', ')}</b> — vérifie leur place dans Paramètres › Grades.` : '') +
+  $('#ir').innerHTML = `<b>${ok}</b> mis à jour (semaine du ${S.weeks[wi]})${cr ? `, <b>${cr}</b> créé(s)` : ''}${gch ? `, <b>${gch}</b> grade(s) modifié(s)` : ''}.` + (ignored.length ? `<br>Ignorés (rang ${(S.ignRanks || []).map(esc).join(' / ')}) : ${ignored.map(esc).join(', ')}` : '') + (archHit.length ? `<br>Agent(s) archivé(s) présents dans la liste (heures enregistrées, toujours archivés) : ${archHit.map(esc).join(', ')}` : '') + (newG.length ? `<br>Grade(s) créé(s) : <b>${newG.map(esc).join(', ')}</b> — vérifie leur place dans Paramètres › Grades.` : '') +
     (unk.length ? `<br>Non reconnus (coche « Créer les agents inconnus » pour les ajouter) : ${unk.map(esc).join(', ')}` : '') +
     (badG.size ? `<br>Rangs absents de la liste des grades (ignorés${$('#ic').checked ? ` ; agents créés en ${esc(low)}` : ''}) : ${[...badG].map(esc).join(', ')} — ajoute-les dans Paramètres › Grades si besoin.` : '');
 }
@@ -288,12 +295,12 @@ document.addEventListener('click', async e => {
   if (act === 'import' && !can('hoursImport')) return;
   if (act === 'week' && !can('weekAdd')) return;
   if (act === 'apply' && !can('cerValidate')) return;
-  if (['gadd', 'gdel', 'gup', 'gdn', 'gcolr'].includes(act) && !can('gradeEdit')) return;
+  if (['gadd', 'gdel', 'gup', 'gdn', 'gcolr', 'iradd', 'irdel'].includes(act) && !can('gradeEdit')) return;
   if (['aadd', 'adel', 'aup', 'adn'].includes(act) && !can('actionEdit')) return;
   if (['sadd', 'sdel', 'sup', 'sdn'].includes(act) && !can('sanctionEdit')) return;
   if (act === 'add') {
     const nom = $('#n-nom').value.trim(), pre = $('#n-pre').value.trim(); if (!nom && !pre) return;
-    { const na = { id: uid(), mat: $('#n-mat').value.trim() || '-', prenom: pre, nom, grade: $('#n-gr').value, w: S.weeks.map(() => null) }; S.agents.push(na); logGrade(na, null, na.grade, 'création'); } upd();
+    { const na = { id: uid(), mat: $('#n-mat').value.trim() || '-', prenom: pre, nom, grade: $('#n-gr').value, w: S.weeks.map(() => null), man: true }; S.agents.push(na); logGrade(na, null, na.grade, 'création'); } upd();
   } else if (act === 'del') {
     const a = S.agents.find(x => x.id === id);
     if (a && await dlg({ title: 'Supprimer définitivement', msg: `Supprimer ${full(a)} (${a.mat}) avec toutes ses heures et son historique ? Cette action est irréversible.`, ok: 'Supprimer', danger: true })) { S.agents = S.agents.filter(x => x !== a); upd(); }
@@ -343,6 +350,8 @@ document.addEventListener('click', async e => {
   }
   else if (act === 'sagent') { st.id = id; render(); }
   else if (act === 'sper') { st.f = +el.dataset.n ? Math.max(0, lastW() - +el.dataset.n + 1) : 0; st.t = null; render(); }
+  else if (act === 'iradd') { const n = $('#irn').value.trim(); if (n && !ignR(n)) { (S.ignRanks ||= []).push(n); upd(); } }
+  else if (act === 'irdel') { S.ignRanks.splice(+el.dataset.i, 1); upd(); }
   else if (act === 'gcolr') { delete S.gcol[S.grades[+el.dataset.i]]; upd(); }
   else if (act === 'sadd') { const n = $('#sn').value.trim(); if (n && !S.sanctions.includes(n)) { S.sanctions.push(n); upd(); } }
   else if (act === 'sdel') { const i = +el.dataset.i; if (await dlg({ title: 'Retirer la sanction', msg: `Retirer « ${S.sanctions[i]} » du menu déroulant ?`, ok: 'Retirer', danger: true })) { S.sanctions.splice(i, 1); upd(); } }
@@ -394,7 +403,7 @@ document.addEventListener('change', e => {
     adminCall('PUT', '/api/roles', { roles: next }).then(ok => { if (!ok) softRender(); });
   }
   else if (act === 'inf') { ent(el.dataset.id)[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value; save(); }
-  else if (act === 'egr') { if (!can('agentEdit')) return; const a = S.agents.find(x => x.id === el.dataset.id), old = a.grade; a.grade = el.value; if (old !== a.grade) logGrade(a, old, a.grade, 'modification manuelle'); save(); }
+  else if (act === 'egr') { if (!can('agentEdit')) return; const a = S.agents.find(x => x.id === el.dataset.id), old = a.grade; a.grade = el.value; if (old !== a.grade) { logGrade(a, old, a.grade, 'modification manuelle'); a.man = true; } save(); }
   else if (act === 'gcol') { S.gcol[S.grades[+el.dataset.i]] = el.value; upd(); }
   else if (act === 'emat' || act === 'epre' || act === 'enom') { // modifier matricule / prénom / nom
     if (!can('agentEdit')) return;
@@ -682,7 +691,7 @@ function staDetail(a) {
     cer.map(o => { const d = o.d, x = S.actions.find(y => y.id === d.a); return `<tr><td>${o.wk}</td><td>${x ? `${sym(x)} ${esc(x.label)}${d.g ? ` → ${esc(d.g)}` : ''}${d.done ? '' : ' <span class="note">(prévu)</span>'}` : '—'}</td><td>${esc(d.sanction || '—')}</td><td>${esc(d.casiers ?? '—')}</td><td>${yes(d.fps)}</td><td>${yes(d.f1020)}</td><td>${yes(d.fus)}</td><td>${yes(d.abs)}</td><td>${esc(d.r || '—')}</td><td>${esc(d.notes || '—')}</td></tr>`; }).join('') + `</tbody></table></div>` : '<p class="note">Aucune cérémonie avec des données pour cet agent.</p>'}</section>`;
 }
 function vSta() {
-  if (st.id && !S.agents.some(a => a.id === st.id)) st.id = null;
+  if (st.id && !S.agents.some(a => a.id === st.id && !hiddenA(a))) st.id = null;
   const a = S.agents.find(x => x.id === st.id);
   return `<div class="sgrid"><section class="panel sl"><div class="ph"><h2>Agents</h2><span class="note">${(st.arch ? S.agents.filter(a => a.arch) : actv()).length} · h. sem. ${S.weeks[lastW()]}</span></div>${S.agents.some(a => a.arch) ? `<div class="segs" style="margin-bottom:10px"><button class="seg${st.arch ? '' : ' on'}" data-a="starch">En service</button><button class="seg${st.arch ? ' on' : ''}" data-a="starch">Archivés</button></div>` : ''}<input id="sas" placeholder="Rechercher (nom, grade, matricule)…" value="${esc(st.q)}" autocomplete="off"><div class="alist" id="alist">${aListHtml()}</div></section>
   <div class="sd">${a ? staDetail(a) : '<section class="panel"><h2>Sélectionne un agent</h2><p class="note">Choisis un agent dans la liste : tu verras toutes ses statistiques depuis le début du site — heures, moyennes sur la période de ton choix, changements de grade, sanctions et cérémonies.</p></section>'}</div></div>`;
