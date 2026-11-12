@@ -111,9 +111,9 @@ const minM = () => Math.round((S.minH ?? 10) * 60); // minimum d'heures par sema
 function hRow(a) { // une ligne de la vue « par semaine »
   const v = a.w[hw], p = hw > 0 ? a.w[hw - 1] : null, mn = minM(), low = v != null && v < mn, d = v != null && p != null ? v - p : null;
   return `<tr class="hr${low ? ' low' : ''}${v == null ? ' empty' : ''}" data-row="${a.id}" style="--c:${gradeColor(a.grade)}"><td><div class="hag"><span class="av">${esc(initials(a))}</span><span><b>${esc(full(a))}</b>${a.mat && a.mat !== '-' ? `<small class="mono">${esc(a.mat)}</small>` : ''}</span></div></td><td>${badge(a.grade)}</td>
-    <td class="hcell hprev">${F(p)}</td><td><input class="hin" data-a="hin" data-id="${a.id}" value="${v == null ? '' : F(v)}" placeholder="—" ${can('hoursEdit') ? '' : 'readonly'}></td>
+    ${hw > 0 ? `<td class="hcell hprev">${F(p)}</td>` : ''}<td><input class="hin" data-a="hin" data-id="${a.id}" value="${v == null ? '' : F(v)}" placeholder="—" ${can('hoursEdit') ? '' : 'readonly'}></td>
     <td><div class="hbar" title="Objectif ${F(mn)} · barre pleine à ${F(BAR_MAX)}"><i style="width:${Math.min(100, (v || 0) / BAR_MAX * 100)}%"></i><em style="left:${Math.min(100, mn / BAR_MAX * 100)}%"></em></div></td>
-    <td class="hcell hd ${d == null ? '' : d >= 0 ? 'pos' : 'neg'}">${d == null ? '—' : Fd(d)}</td></tr>`;
+    ${hw > 0 ? `<td class="hcell hd ${d == null ? '' : d >= 0 ? 'pos' : 'neg'}">${d == null ? '—' : Fd(d)}</td>` : ''}</tr>`;
 }
 function hStats() {
   const all = actv(), mn = minM(), vals = all.map(a => a.w[hw]), f = vals.filter(x => x != null), t = f.reduce((x, y) => x + y, 0), act = f.filter(x => x > 0).length;
@@ -138,8 +138,8 @@ function vHrs() {
   return `<div class="frm htool"><div class="wnav"><button class="btn ghost" data-a="hprev" ${hw > 0 ? '' : 'disabled'} title="Semaine précédente">◀</button><select id="hw">${wopts(hw)}</select><button class="btn ghost" data-a="hnext" ${hw < S.weeks.length - 1 ? '' : 'disabled'} title="Semaine suivante">▶</button></div>${seg}${filt}
     <label class="hmin" title="Minimum d’heures par semaine">Minimum <input data-a="hmin" type="number" min="0" step="0.5" value="${S.minH ?? 10}" ${can('hoursEdit') ? '' : 'disabled'}> h</label></div>
     <div class="skg hcards" id="hcards">${hCards()}</div>
-    <p class="note">Semaine du <b>${S.weeks[hw]}</b>${hw > 0 ? ` · semaine précédente : ${S.weeks[hw - 1]}` : ''} · saisis les heures (12h30, 12:30 ou 12.5) puis Entrée ou Tab.</p>
-    <div class="wrapt"><table class="htab"><thead><tr><th>Agent</th><th>Grade</th><th>Sem. préc.</th><th>Heures</th><th title="Le trait vertical marque le minimum">Progression</th><th>Écart</th></tr></thead><tbody>` +
+    <p class="note">Semaine du <b>${S.weeks[hw]}</b>${hw > 0 ? ` · comparée à la semaine du ${S.weeks[hw - 1]}` : ' · première semaine enregistrée : pas de semaine précédente à comparer'} · saisis les heures (12h30, 12:30 ou 12.5) puis Entrée ou Tab.</p>
+    <div class="wrapt"><table class="htab"><thead><tr><th>Agent</th><th>Grade</th>${hw > 0 ? `<th title="Heures de la semaine précédente">Sem. du ${S.weeks[hw - 1]}</th>` : ''}<th>Heures du ${S.weeks[hw]}</th><th title="Le trait vertical marque le minimum">Progression</th>${hw > 0 ? '<th title="Différence avec la semaine précédente">Écart</th>' : ''}</tr></thead><tbody>` +
     L.map(hRow).join('') + `</tbody></table></div>${L.length ? '' : '<p class="note">Aucun agent.</p>'}`;
 }
 function vImp() {
