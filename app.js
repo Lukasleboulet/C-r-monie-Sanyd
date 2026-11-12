@@ -115,8 +115,8 @@ const INFO = [['casiers', 'Nb Casiers', 'num'], ['sanction', 'Sanction', 'sel'],
 function infoCell(a, d, [k, , t], dis) {
   const v = d[k], at = `data-a="inf" data-id="${a.id}" data-k="${k}"${dis ? ' disabled' : ''}`;
   if (t === 'chk') return `<td class="ck"><label class="chk"><input type="checkbox" ${at} ${v ? 'checked' : ''}><span></span></label></td>`;
-  if (t === 'sel') { const L = [...S.sanctions]; if (v && !L.includes(v)) L.push(v); return `<td><select class="cin" style="width:170px" ${at}><option value="">—</option>${L.map(o => `<option ${v === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></td>`; }
-  return `<td><input class="cin" type="number" min="0" style="width:74px" ${at} value="${esc(v ?? '')}"></td>`;
+  if (t === 'sel') { const L = [...S.sanctions]; if (v && !L.includes(v)) L.push(v); return `<td><select class="cin" ${at}><option value="">—</option>${L.map(o => `<option ${v === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></td>`; }
+  return `<td><input class="cin" type="number" min="0" ${at} value="${esc(v ?? '')}"></td>`;
 }
 function vCer() {
   if (cw == null || cw >= S.weeks.length) cw = S.weeks.length - 1;
@@ -125,16 +125,16 @@ function vCer() {
     const h1 = j > 0 ? a.w[j - 1] : null, h2 = a.w[j], d = D[a.id] || {}, on = !!d.a, lock = !can('cerEdit') || (d.done && !can('cerEditDone'));
     const gi0 = S.grades.indexOf(d.done ? d.from : a.grade), gk = S.grades.indexOf(d.g || ''), cls = !on ? '' : gk < 0 || gk === gi0 ? 'dec' : gk < gi0 ? 'up' : 'down';
     return `<tr class="${cls}"><td><div class="nm"><span>${esc(a.prenom)} <b>${esc((a.nom || '').toUpperCase())}</b></span>${badge(d.done ? d.from : a.grade)}</div></td><td class="mono">${esc(a.mat)}</td>
-    <td><div class="stk"><select class="cin" data-a="act" data-id="${a.id}" ${lock ? 'disabled' : ''}><option value="">— Décision —</option>${S.actions.map(x => `<option value="${x.id}" ${d.a === x.id ? 'selected' : ''}>${sym(x)} ${esc(x.label)}</option>`).join('')}</select>
+    <td><div class="stk"><select class="cin" data-a="act" data-id="${a.id}" ${lock ? 'disabled' : ''}><option value="">Décision</option>${S.actions.map(x => `<option value="${x.id}" ${d.a === x.id ? 'selected' : ''}>${sym(x)} ${esc(x.label)}</option>`).join('')}</select>
     <select class="cin" data-a="ng" data-id="${a.id}" title="Nouveau grade" ${lock ? 'disabled' : ''}>${gopts(on ? d.g || a.grade : a.grade)}</select></div></td>
     <td>${F(h1)}</td><td>${F(h2)}</td><td><b>${F(Math.round(((h1 || 0) + (h2 || 0)) / 2))}</b></td>
     ${INFO.map(i => infoCell(a, d, i, !can('cerEdit'))).join('')}
-    <td><input class="cin" style="width:230px" data-a="why" data-id="${a.id}" value="${esc(d.r || '')}" placeholder="Explication" ${lock ? 'disabled' : ''}></td>
-    <td><input class="cin" style="width:230px" data-a="inf" data-id="${a.id}" data-k="notes" value="${esc(d.notes || '')}" ${can('cerEdit') ? '' : 'disabled'}></td></tr>`;
+    <td><input class="cin" data-a="why" data-id="${a.id}" value="${esc(d.r || '')}" placeholder="Explication" ${lock ? 'disabled' : ''}></td>
+    <td><input class="cin" data-a="inf" data-id="${a.id}" data-k="notes" placeholder="Notes" value="${esc(d.notes || '')}" ${can('cerEdit') ? '' : 'disabled'}></td></tr>`;
   }).join('');
   return `<section class="panel"><h2>Cérémonie</h2><div class="frm"><select id="cw">${wopts(j)}</select>
   <span class="note">S-1 = semaine du ${w1} · S-2 = semaine du ${wk} · Moyenne = (S-1 + S-2) ÷ 2 · Choisis une décision, ou directement un nouveau grade.</span></div></section>
-  <div class="wrapt g"><table class="cer"><thead><tr><th rowspan="2">Prénom NOM</th><th rowspan="2">Matricule</th><th rowspan="2">Promotion</th><th colspan="3" class="h">Nombre d’heures par semaine</th><th colspan="6" class="i">Informations</th><th rowspan="2" class="e">Explication décision</th><th rowspan="2" class="n">Notes CS</th></tr>
+  <div class="wrapt cerw"><table class="cer"><thead><tr><th rowspan="2">Prénom NOM</th><th rowspan="2">Matricule</th><th rowspan="2">Promotion</th><th colspan="3" class="h">Nombre d’heures par semaine</th><th colspan="6" class="i">Informations</th><th rowspan="2" class="e">Explication décision</th><th rowspan="2" class="n">Notes CS</th></tr>
   <tr class="r2"><th class="h">S-1<small>${w1}</small></th><th class="h">S-2<small>${wk}</small></th><th class="h">Moyenne</th>${INFO.map(i => `<th class="i">${i[1]}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
   <section class="panel" style="margin-top:14px"><h2>Récapitulatif</h2><pre id="rc">${esc(recap())}</pre>
   <div class="frm noprint"><button class="btn gold" data-a="copy">Copier</button>
@@ -185,9 +185,12 @@ function render() {
     ? `<section class="panel"><h2>Compte en attente de validation</h2><p class="note">Tu es connecté avec Discord, mais aucun rôle ne t’a encore été attribué. Communique ton ID Discord à un administrateur : <b class="mono">${esc(me.discordId || '')}</b></p></section>`
     : '<section class="panel"><h2>Aucun accès</h2><p class="note">Ton rôle n’a accès à aucun onglet. Demande à un administrateur de modifier tes accès.</p></section>';
   { const pend = mgr() ? users.filter(u => u.role === 'pending').length : 0, sb = $('#nav [data-t="set"]'); if (pend) sb.dataset.n = pend; else delete sb.dataset.n; }
-  if (me) { $('#un').textContent = me.name; $('#ur').textContent = roleOf(me).name; { const dp = me.dname ? `Discord : ${me.dname}${me.dun && me.dun !== me.dname ? ' (@' + me.dun + ')' : ''}` : ''; $('#ud').textContent = dp; $('#ud').hidden = !dp; } { const av = me.discordId && me.avatar ? `https://cdn.discordapp.com/avatars/${me.discordId}/${me.avatar}.png?size=64` : ''; $('#uav').style.backgroundImage = av ? `url(${av})` : ''; $('#uav').textContent = av ? '' : me.name.slice(0, 2); } $('#ucard').classList.toggle('adm', admin); $('#rn').textContent = roleOf(me).name; $('#rl').textContent = admin ? 'accès total' : `${roleOf(me).tabs.length} onglet(s) · ${(roleOf(me).perms || []).length} permission(s)`; }
+  if (me) { $('#un').textContent = me.name; $('#ur').textContent = roleOf(me).name; { const dp = me.dname ? (me.dun ? '@' + me.dun : me.dname) : ''; $('#ud').textContent = dp; $('#ud').hidden = !dp; } { const av = me.discordId && me.avatar ? `https://cdn.discordapp.com/avatars/${me.discordId}/${me.avatar}.png?size=64` : ''; $('#uav').style.backgroundImage = av ? `url(${av})` : ''; $('#uav').textContent = av ? '' : me.name.slice(0, 2); } $('#ucard').classList.toggle('adm', admin); $('#rn').textContent = roleOf(me).name; $('#rl').textContent = admin ? 'accès total' : `${roleOf(me).tabs.length} onglet(s) · ${(roleOf(me).perms || []).length} permission(s)`; }
+  setTopH();
   $('#bk').hidden = !can('dataBackup'); $('#rz').hidden = $('#rs').parentElement.hidden = !can('dataReset');
 }
+function setTopH() { const t = $('.top'), m = $('.main'); if (t && m) m.style.setProperty('--toph', t.offsetHeight - 22 + 'px'); const h = $('.cer thead tr'); if (h && m) m.style.setProperty('--h1', h.offsetHeight + 'px'); } // hauteur de l'en-tête collant (les en-têtes de tableau se placent dessous)
+addEventListener('resize', setTopH);
 const upd = () => { save(); render(); };
 
 // ---------- actions ----------
@@ -771,7 +774,7 @@ const MKEY = KEY + '-mode'; let mode = 'dark'; try { mode = localStorage.getItem
 const applyMode = () => { document.documentElement.classList.toggle('light', mode === 'light'); $('#mode').title = mode === 'light' ? 'Passer en mode sombre' : 'Passer en mode clair'; };
 $('#mode').onclick = () => { mode = mode === 'light' ? 'dark' : 'light'; try { localStorage.setItem(MKEY, mode); } catch (e) {} applyMode(); };
 applyMode();
-const tick = () => { const d = new Date(); $('#clk').textContent = d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase() + ' · ' + d.toLocaleTimeString('fr-FR'); };
+const tick = () => { const d = new Date(); $('#clk').innerHTML = `<b>${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}<small>:${String(d.getSeconds()).padStart(2, '0')}</small></b><span>${d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</span>`; };
 tick(); setInterval(tick, 1000);
 render();
 document.addEventListener('focusout', () => { if (needRender) setTimeout(() => { if (needRender && !editing()) { needRender = false; render(); } }, 150); });
