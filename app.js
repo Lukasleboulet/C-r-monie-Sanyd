@@ -55,7 +55,8 @@ function migrate(d) { // le grade « Rookie-PPA » n'existe pas : fusionné dans
   d.gcol ||= {};
   d.glog ||= [];
   d.medals ||= defaultMedals();
-  d.medals.forEach(m => { if (m.months && !m.n) { m.n = m.months; m.u = 'm'; } delete m.months; }); // ancienneté : nombre + unité (j, s, m, a) d.awards ||= {}; d.sheet ||= { url: '', gid: '', district: 'Sandy Shore', gmap: {}, last: 0 };
+  d.medals.forEach(m => { if (m.months && !m.n) { m.n = m.months; m.u = 'm'; } delete m.months; }); // ancienneté : nombre + unité (j, s, m, a)
+  d.awards ||= {}; d.sheet ||= { url: '', gid: '', district: 'Sandy Shore', gmap: {}, last: 0 };
   sortWeeks(d);
   d.ignRanks ||= ['Patron', 'Sheriff']; // rangs ignorés à l'import et masqués (sauf agents ajoutés à la main)
   d.sanctions ||= [...DEFAULT_SANCTIONS];
@@ -221,7 +222,7 @@ function render() {
   $('#psub').textContent = tab ? (tab === 'eff' ? `${actv().length} agent(s) en service · ` : '') + TSUB[tab] : 'Aucun onglet n’est autorisé pour ton rôle.';
   $('#pic').innerHTML = tab ? `<svg viewBox="0 0 24 24">${TICON[tab]}</svg>` : '';
   setKpi();
-  $('#view').innerHTML = tab ? views[tab]() : me?.role === 'pending'
+  $('#view').innerHTML = tab ? (() => { try { return views[tab](); } catch (e) { console.error(e); return `<section class="panel"><h2>Erreur d’affichage</h2><p class="note">Cet onglet n’a pas pu s’afficher : ${esc(e.message)}. Recharge la page (Ctrl + F5) ; si ça continue, envoie ce message.</p></section>`; } })() : me?.role === 'pending'
     ? `<section class="panel"><h2>Compte en attente de validation</h2><p class="note">Tu es connecté avec Discord, mais aucun rôle ne t’a encore été attribué. Communique ton ID Discord à un administrateur : <b class="mono">${esc(me.discordId || '')}</b></p></section>`
     : '<section class="panel"><h2>Aucun accès</h2><p class="note">Ton rôle n’a accès à aucun onglet. Demande à un administrateur de modifier tes accès.</p></section>';
   { const pend = mgr() ? users.filter(u => u.role === 'pending').length : 0, sb = $('#nav [data-t="acc"]'); if (pend) sb.dataset.n = pend; else delete sb.dataset.n; }
