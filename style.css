@@ -43,8 +43,8 @@ nav button.nf{display:none}
 .rolecard b{flex:1;font-size:.9rem;font-weight:600}.rolecard em{font-style:normal;font-size:.68rem;color:var(--mute)}
 
 /* --- contenu --- */
-.main{min-width:0;overflow:auto;padding:22px 32px 48px;scrollbar-color:#5a4228 transparent}
-.top{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;max-width:1400px;margin-bottom:20px}
+.main{position:relative;min-width:0;overflow:auto;padding:22px 32px 48px;scrollbar-color:#5a4228 transparent}
+.top{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:20px}
 .ttl{display:flex;align-items:center;gap:16px}
 .pic{display:grid;place-items:center;flex:none;width:52px;height:52px;border-radius:16px;border:1px solid rgba(240,138,60,.45);background:radial-gradient(circle at 30% 20%,rgba(240,138,60,.38),rgba(240,138,60,.08));color:var(--acc2);box-shadow:0 0 28px rgba(240,138,60,.2)}
 .pic svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -54,7 +54,7 @@ h1{margin:0;font-size:1.75rem;font-weight:800;letter-spacing:-.02em;line-height:
 .kpi{min-width:96px;padding:8px 14px;text-align:center;border:1px solid var(--line2);border-radius:14px;background:linear-gradient(180deg,var(--card2),var(--card))}
 .kpi span{display:block;font-size:.68rem;color:var(--mute);white-space:nowrap}.kpi b{display:block;font-size:1.5rem;font-weight:800;line-height:1.2;letter-spacing:-.02em}
 .kpi.k1 b{color:var(--acc2)}.kpi.k2 b{color:var(--green)}
-main{max-width:1400px}
+main{max-width:none}
 .panel{position:relative;padding:18px 20px;margin-bottom:16px;border:1px solid var(--line2);border-radius:var(--r);background:linear-gradient(180deg,var(--card2),var(--card));box-shadow:inset 0 1px 0 rgba(255,220,170,.06),0 18px 40px rgba(0,0,0,.35)}
 .panel::before{content:"";position:absolute;left:24px;right:24px;top:-1px;height:1px;background:linear-gradient(90deg,transparent,rgba(240,138,60,.75),transparent);pointer-events:none}
 h2{margin:0 0 12px;font-size:1rem;font-weight:700;color:var(--fg)}
@@ -91,7 +91,7 @@ input[type=color]{flex:none;min-width:0;width:46px;height:40px;padding:3px;curso
 .ck{text-align:center}
 
 /* --- tableaux --- */
-.wrapt{overflow:auto;max-height:64vh;border:1px solid var(--line2);border-radius:var(--r);background:linear-gradient(180deg,var(--card2),var(--card));box-shadow:0 18px 40px rgba(0,0,0,.35)}
+.wrapt{position:relative;overflow:auto;max-height:max(360px,calc(100vh - 300px));border:1px solid var(--line2);border-radius:var(--r);background:linear-gradient(180deg,var(--card2),var(--card));box-shadow:0 18px 40px rgba(0,0,0,.35)}
 table{border-collapse:collapse;width:100%;font-size:.9rem;font-variant-numeric:tabular-nums}
 th,td{padding:13px 16px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
 th{position:sticky;top:0;z-index:2;background:#241810;color:var(--mute);font:600 .7rem Inter,sans-serif;letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--line2)}
@@ -279,3 +279,5 @@ fieldset.ro .btn{display:none}
 .dpn.on{border-style:solid;border-color:rgba(88,101,242,.55);background:rgba(88,101,242,.12);color:var(--fg)}
 .dpn.on svg{color:#8b95ff}
 .dpn i{font-style:normal;opacity:.7}
+/* l'appli occupe exactement l'écran sur ordinateur : seule la zone de contenu défile (la page entière ne bouge plus) */
+@media(min-width:951px){html,body{height:100%;overflow:hidden}}
