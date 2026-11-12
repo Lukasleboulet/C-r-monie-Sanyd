@@ -281,3 +281,43 @@ fieldset.ro .btn{display:none}
 .dpn i{font-style:normal;opacity:.7}
 /* l'appli occupe exactement l'écran sur ordinateur : seule la zone de contenu défile (la page entière ne bouge plus) */
 @media(min-width:951px){html,body{height:100%;overflow:hidden}}
+/* ---------- onglet Statistiques (refonte) ---------- */
+.sgrid{grid-template-columns:320px minmax(0,1fr);gap:18px}
+.sd{display:flex;flex-direction:column;gap:16px}.sd>.panel{margin:0}
+.ph{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}.ph h2{margin:0}
+.sl .ph{margin-bottom:10px}.sl input{width:100%;box-sizing:border-box}
+.alist{max-height:calc(100vh - 290px);gap:2px}
+.ai{padding:9px 10px;align-items:center}
+.ai .av{width:36px;height:36px;border-radius:11px;border-color:color-mix(in srgb,var(--c) 60%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--c) 35%,transparent),color-mix(in srgb,var(--c) 8%,transparent))}
+.ai-n{white-space:normal;display:flex;flex-direction:column;gap:4px}
+.ai-n>b{font-weight:600;font-size:.92rem;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ai-n>span{display:flex;align-items:center;gap:8px;min-width:0}.ai-n small{display:inline;color:var(--mute);font-size:.72rem}
+.ai .bdg{font-size:.62rem;padding:1px 8px}
+.ai-h{flex:none;font-size:.78rem;color:var(--mute)}.ai.on .ai-h{color:var(--acc2)}
+.hero{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;background:radial-gradient(600px 200px at 0 0,color-mix(in srgb,var(--c) 18%,transparent),transparent 70%),linear-gradient(180deg,var(--card2),var(--card))}
+.hero-l{display:flex;align-items:center;gap:18px;min-width:0}
+.hero .av.big{width:72px;height:72px;border-radius:20px;font-size:1.4rem;border:2px solid color-mix(in srgb,var(--c) 70%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--c) 40%,transparent),color-mix(in srgb,var(--c) 10%,transparent));box-shadow:0 10px 30px color-mix(in srgb,var(--c) 25%,transparent)}
+.hero-id h2{margin:0;font-size:1.6rem;letter-spacing:-.01em}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{display:inline-flex;flex-direction:column;padding:5px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(0,0,0,.18);font-weight:700;font-size:.9rem}
+.chip small{font-weight:500;font-size:.64rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.hero-r{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.lbl{font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.segs{display:inline-flex;padding:3px;border:1px solid var(--line2);border-radius:12px;background:rgba(0,0,0,.25)}
+.seg{padding:6px 12px;border:0;border-radius:9px;background:none;color:var(--mute);font:600 .8rem Inter,sans-serif;cursor:pointer;transition:.15s}
+.seg:hover{color:var(--fg)}.seg.on{background:linear-gradient(180deg,var(--acc2),var(--acc));color:#2a1405}
+.per{display:flex;align-items:center;gap:8px}.per .cs{min-width:150px}
+.skg{gap:12px}.skg.big3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.sk{padding:12px 16px;min-width:0}
+.sk span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sk b{font-size:1.35rem}
+.sk.big{padding:16px 20px}.sk.big b{font-size:2.1rem;line-height:1.15;margin-top:2px}.sk.big em{display:block;font-style:normal;font-size:.78rem;color:var(--mute)}
+.chartw{overflow-x:auto}.chart{width:100%;min-width:520px;height:auto;max-height:340px}
+.ch-g{stroke:var(--line)}.ch-g.z{stroke:var(--line2)}
+.ch-t{font:12px Inter,sans-serif}.ch-v{fill:var(--fg);font:700 12px Inter,sans-serif}
+.ch-b{fill:url(#cg);transition:opacity .15s}.ch-b:hover{opacity:.8}
+.ch-ab{fill:color-mix(in srgb,var(--sand) 18%,var(--card))}.ch-at{font:700 11px Inter,sans-serif}
+.s2{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:16px;align-items:start}.s2>.panel{margin:0}
+td.pos{color:var(--green)}td.neg{color:var(--red)}span.ok{color:var(--green);font-weight:700}
+html.light .chip,html.light .segs{background:#fff6e6}html.light .ch-v{fill:#3a2815}
+@media(max-width:950px){.hero-r{align-items:flex-start}.alist{max-height:260px}.s2{grid-template-columns:1fr}}

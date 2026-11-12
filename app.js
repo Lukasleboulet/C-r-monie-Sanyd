@@ -612,21 +612,23 @@ const aSt = (a, f, t) => { const v = a.w.slice(f, t + 1), k = v.filter(x => x !=
 const initials = a => ((a.prenom || '')[0] || '') + ((a.nom || '')[0] || '');
 const Fd = m => (m < 0 ? '−' : '+') + F(Math.abs(Math.round(m)));
 function aListHtml() {
-  const q = norm(st.q), L = sorted().filter(a => !q || norm(full(a) + ' ' + a.mat).includes(q));
-  return L.map(a => `<button type="button" class="ai${a.id === st.id ? ' on' : ''}" data-a="sagent" data-id="${a.id}"><span class="av">${esc(initials(a))}</span><span class="ai-n">${esc(full(a))}<small>${esc(a.mat)}</small></span>${badge(a.grade)}</button>`).join('') || '<p class="note">Aucun agent.</p>';
+  const q = norm(st.q), L = sorted().filter(a => !q || norm(full(a) + ' ' + a.mat + ' ' + a.grade).includes(q)), lw = lastW();
+  return L.map(a => `<button type="button" class="ai${a.id === st.id ? ' on' : ''}" data-a="sagent" data-id="${a.id}" style="--c:${gradeColor(a.grade)}"><span class="av">${esc(initials(a))}</span><span class="ai-n"><b>${esc(full(a))}</b><span>${badge(a.grade)}${a.mat && a.mat !== '-' ? `<small class="mono">${esc(a.mat)}</small>` : ''}</span></span><span class="ai-h mono" title="Semaine du ${S.weeks[lw]}">${F(a.w[lw])}</span></button>`).join('') || '<p class="note">Aucun agent.</p>';
 }
 function chartSvg(a, f, t, avg) {
-  const n = t - f + 1, W = Math.max(520, n * 34 + 60), H = 230, L = 46, B = 28, T = 14, pw = W - L - 12, ph = H - B - T, slot = pw / n, bw = Math.min(24, slot * .62);
-  const vals = a.w.slice(f, t + 1), mxh = Math.max(10, Math.ceil(Math.max(0, ...vals.map(v => v || 0)) / 600) * 10), y = h => T + ph - (h / mxh) * ph;
-  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" style="min-width:${W}px" role="img" aria-label="Heures par semaine"><defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--acc2)"/><stop offset="1" stop-color="var(--acc)"/></linearGradient></defs>`;
-  for (let i = 0; i <= 4; i++) { const h = mxh * i / 4, yy = y(h); s += `<line class="ch-g" x1="${L}" x2="${W - 12}" y1="${yy}" y2="${yy}"/><text class="ch-t" x="${L - 8}" y="${yy + 4}" text-anchor="end">${Math.round(h)}h</text>`; }
+  const n = t - f + 1, W = Math.max(1000, n * 46 + 70), H = 280, L = 52, R = 16, B = 34, T = 26, pw = W - L - R, ph = H - B - T, slot = pw / n, bw = Math.min(46, slot * .56);
+  const vals = a.w.slice(f, t + 1), mx = Math.max(60, ...vals.map(v => v || 0), avg || 0) / 60;
+  const step = [1, 2, 5, 10, 20, 25, 50, 100].find(x => mx / x <= 5) || 100, top = Math.ceil(mx / step) * step || step, y = h => T + ph - (h / top) * ph;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Heures par semaine"><defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--acc2)"/><stop offset="1" stop-color="var(--acc)" stop-opacity=".75"/></linearGradient></defs>`;
+  for (let h = 0; h <= top; h += step) { const yy = y(h); s += `<line class="ch-g${h ? '' : ' z'}" x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}"/><text class="ch-t" x="${L - 10}" y="${yy + 4}" text-anchor="end">${h}h</text>`; }
   vals.forEach((v, i) => {
     const cx = L + slot * i + slot / 2, wk = S.weeks[f + i];
-    if (v == null) s += `<circle class="ch-n" cx="${cx}" cy="${y(0) - 3}" r="2.5"><title>${wk} : pas de donnée</title></circle>`;
-    else { const hh = Math.max(v > 0 ? 2 : 0, y(0) - y(v / 60)); s += `<rect class="ch-b" x="${cx - bw / 2}" y="${y(0) - hh}" width="${bw}" height="${hh}" rx="4"><title>${wk} : ${F(v)}</title></rect>`; }
-    if (n <= 16 || i % Math.ceil(n / 16) === 0) s += `<text class="ch-t" x="${cx}" y="${H - 8}" text-anchor="middle">${wk}</text>`;
+    if (v == null) s += `<circle class="ch-n" cx="${cx}" cy="${y(0) - 4}" r="3"><title>${wk} : pas de donnée</title></circle>`;
+    else { const hh = Math.max(v > 0 ? 3 : 0, y(0) - y(v / 60)); s += `<rect class="ch-b" x="${cx - bw / 2}" y="${y(0) - hh}" width="${bw}" height="${hh}" rx="6"><title>${wk} : ${F(v)}</title></rect>`;
+      if (n <= 20) s += `<text class="ch-v" x="${cx}" y="${y(0) - hh - 7}" text-anchor="middle">${F(v)}</text>`; }
+    if (n <= 20 || i % Math.ceil(n / 20) === 0) s += `<text class="ch-t" x="${cx}" y="${H - 10}" text-anchor="middle">${wk}</text>`;
   });
-  if (avg != null) { const ya = y(avg / 60); s += `<line class="ch-a" x1="${L}" x2="${W - 12}" y1="${ya}" y2="${ya}"/><text class="ch-at" x="${W - 14}" y="${ya - 5}" text-anchor="end">moy. ${F(Math.round(avg))}</text>`; }
+  if (avg != null) { const ya = y(avg / 60); s += `<line class="ch-a" x1="${L}" x2="${W - R}" y1="${ya}" y2="${ya}"/><rect class="ch-ab" x="${W - R - 104}" y="${ya - 22}" width="104" height="18" rx="9"/><text class="ch-at" x="${W - R - 52}" y="${ya - 9}" text-anchor="middle">moy. ${F(Math.round(avg))}</text>`; }
   return s + '</svg>';
 }
 function gradeHistory(a) { // changements de grade : création / modifications manuelles (journal) + décisions de cérémonie
@@ -639,27 +641,32 @@ function staDetail(a) {
   const pool = S.agents.map(x => ({ x, s: aSt(x, f, t) })).filter(o => o.s.n).sort((p, q) => q.s.avg - p.s.avg);
   const rank = pool.findIndex(o => o.x.id === a.id) + 1, davg = pool.length ? pool.reduce((x, o) => x + o.s.avg, 0) / pool.length : 0, first = a.w.findIndex(x => x != null);
   const k = s.k, trend = k.length >= 6 ? k.slice(-3).reduce((x, y) => x + y, 0) / 3 - k.slice(-6, -3).reduce((x, y) => x + y, 0) / 3 : null;
-  const card = (l, v, cls = '') => `<div class="sk ${cls}"><span>${l}</span><b>${v}</b></div>`;
-  const hist = gradeHistory(a);
+  const big = (l, v, sub, cls = '') => `<div class="sk big ${cls}"><span>${l}</span><b>${v}</b>${sub ? `<em>${sub}</em>` : ''}</div>`;
+  const card = (l, v, cls = '') => `<div class="sk ${cls}" title="${esc(l)}"><span>${l}</span><b>${v}</b></div>`;
+  const hist = gradeHistory(a), n0 = t - f + 1;
   const cer = S.weeks.map((wk, j) => ({ wk, j, d: S.ceremonies[wk]?.[a.id] })).filter(o => o.d && (o.d.a || o.d.sanction || o.d.casiers || o.d.fps || o.d.f1020 || o.d.fus || o.d.abs || o.d.r || o.d.notes));
-  const yes = v => v ? '✓' : '—', nS = cer.filter(o => o.d.sanction).length, nA = cer.filter(o => o.d.abs).length;
-  const wk = [...Array(t - f + 1).keys()].map(i => f + i).reverse();
-  return `<section class="panel"><div class="sh-h"><span class="av big">${esc(initials(a))}</span><div><h2 style="margin:0">${esc(full(a))} <span class="mono">${esc(a.mat)}</span></h2><div class="sub-l">${badge(a.grade)} <span class="note">${first < 0 ? 'Aucune heure enregistrée' : `Premières heures : semaine du ${S.weeks[first]}`} · ${all.n} semaine(s) suivie(s) · total ${F(all.sum)} · moyenne globale ${F(Math.round(all.avg))}</span></div></div></div></section>
-  <section class="panel"><h2>Période analysée</h2><div class="frm"><span class="note">Du</span><select id="pf">${wopts(f)}</select><span class="note">au</span><select id="pe">${wopts(t)}</select>
-    <button class="btn ghost" data-a="sper" data-n="0">Tout</button><button class="btn ghost" data-a="sper" data-n="4">4 sem.</button><button class="btn ghost" data-a="sper" data-n="8">8 sem.</button><button class="btn ghost" data-a="sper" data-n="12">12 sem.</button></div>
-    <div class="skg">${card('Total (période)', F(s.sum), 'hi')}${card('Moyenne / semaine', F(Math.round(s.avg)), 'hi')}${card('Semaines actives', `${s.act}/${s.n}`)}${card('Meilleure semaine', F(s.best))}${card('Semaine la plus faible', F(s.low))}${card('Dernière semaine', F(s.last))}
-    ${card('Tendance (3 sem.)', trend == null ? '–' : Fd(trend), trend == null ? '' : trend >= 0 ? 'up' : 'down')}${card('Classement (moyenne)', rank ? `${rank}<small>/${pool.length}</small>` : '–')}${card('Écart au district', s.n ? Fd(s.avg - davg) : '–', s.n ? (s.avg >= davg ? 'up' : 'down') : '')}</div></section>
-  <section class="panel"><h2>Heures par semaine</h2><div class="chartw">${chartSvg(a, f, t, s.n ? s.avg : null)}</div></section>
-  <section class="panel"><h2>Historique des grades</h2>${hist.length ? `<div class="tl">` + hist.map(h => `<div class="tli${h.st === 'prevu' ? ' pv' : ''}"><i></i><div><b>${h.from ? `${badge(h.from)} → ${badge(h.to)}` : badge(h.to)}</b><span>${esc(h.src)}${h.st === 'prevu' ? ' · décision non appliquée' : ''} · sem. du ${S.weeks[h.w] ?? '?'}${h.t ? ' · ' + new Date(h.t).toLocaleDateString('fr-FR') : ''}</span>${h.why ? `<em>${esc(h.why)}</em>` : ''}</div></div>`).join('') + `</div>` : '<p class="note">Aucun changement de grade enregistré.</p>'}<p class="note" style="margin-top:10px">Grade actuel : ${badge(a.grade)}</p></section>
-  <section class="panel"><h2>Cérémonies & suivi</h2><p class="note">${cer.length} cérémonie(s) avec des données · ${nS} sanction(s) · ${nA} absence(s)</p>${cer.length ? `<div class="wrapt"><table><thead><tr><th>Semaine</th><th>Décision</th><th>Sanction</th><th>Casiers</th><th>Forma PS</th><th>Forma 10-20</th><th>Fusillade</th><th>Absence</th><th>Explication</th><th>Notes</th></tr></thead><tbody>` +
-    cer.map(o => { const d = o.d, x = S.actions.find(y => y.id === d.a); return `<tr><td>${o.wk}</td><td>${x ? `${sym(x)} ${esc(x.label)}${d.g ? ` → ${esc(d.g)}` : ''}${d.done ? '' : ' <span class="note">(prévu)</span>'}` : '—'}</td><td>${esc(d.sanction || '—')}</td><td>${esc(d.casiers ?? '—')}</td><td>${yes(d.fps)}</td><td>${yes(d.f1020)}</td><td>${yes(d.fus)}</td><td>${yes(d.abs)}</td><td>${esc(d.r || '—')}</td><td>${esc(d.notes || '—')}</td></tr>`; }).join('') + `</tbody></table></div>` : ''}</section>
-  <section class="panel"><h2>Détail semaine par semaine</h2><div class="wrapt" style="max-height:340px"><table><thead><tr><th>Semaine</th><th>Heures</th><th>Écart à la moyenne</th><th></th></tr></thead><tbody>` +
-    wk.map(i => { const v = a.w[i]; return `<tr><td>${S.weeks[i]}</td><td class="hcell">${F(v)}</td><td class="hcell">${v == null || !s.n ? '—' : Fd(v - s.avg)}</td><td><span class="mini"><i style="width:${Math.min(100, (v || 0) / BAR_MAX * 100)}%"></i></span></td></tr>`; }).join('') + `</tbody></table></div></section>`;
+  const yes = v => v ? '<span class="ok">✓</span>' : '<span class="note">—</span>', nS = cer.filter(o => o.d.sanction).length, nA = cer.filter(o => o.d.abs).length;
+  const wk = [...Array(n0).keys()].map(i => f + i).reverse();
+  const preset = [[0, 'Tout'], [4, '4 sem.'], [8, '8 sem.'], [12, '12 sem.']].map(([nn, l]) => { const on = nn ? f === Math.max(0, last - nn + 1) && t === last && last - nn + 1 >= 0 : f === 0 && t === last; return `<button class="seg${on ? ' on' : ''}" data-a="sper" data-n="${nn}">${l}</button>`; }).join('');
+  const chip = (l, v) => `<span class="chip"><small>${l}</small>${v}</span>`;
+  return `<section class="panel hero" style="--c:${gradeColor(a.grade)}"><div class="hero-l"><span class="av big">${esc(initials(a))}</span><div class="hero-id"><h2>${esc(full(a))}</h2><div class="sub-l">${badge(a.grade)}${a.mat && a.mat !== '-' ? `<span class="mono note">Matricule ${esc(a.mat)}</span>` : ''}</div>
+    <div class="chips">${chip('Premières heures', first < 0 ? '—' : 'sem. du ' + S.weeks[first])}${chip('Semaines suivies', all.n)}${chip('Total global', F(all.sum))}${chip('Moyenne globale', F(Math.round(all.avg)))}</div></div></div>
+    <div class="hero-r"><small class="lbl">Période analysée</small><div class="segs">${preset}</div><div class="per"><select id="pf">${wopts(f)}</select><span class="note">→</span><select id="pe">${wopts(t)}</select></div></div></section>
+  <div class="skg big3">${big('Total sur la période', F(s.sum), `${s.n} semaine(s) avec données`, 'hi')}${big('Moyenne / semaine', F(Math.round(s.avg)), s.n ? `district : ${F(Math.round(davg))}` : '', 'hi')}${big('Classement', rank ? `${rank}<small> / ${pool.length}</small>` : '–', 'à la moyenne sur la période')}</div>
+  <div class="skg">${card('Semaines actives', `${s.act}<small> / ${s.n}</small>`)}${card('Meilleure semaine', F(s.best))}${card('Plus faible', F(s.low))}${card('Dernière semaine', F(s.last))}${card('Tendance 3 sem.', trend == null ? '–' : Fd(trend), trend == null ? '' : trend >= 0 ? 'up' : 'down')}${card('Écart au district', s.n ? Fd(s.avg - davg) : '–', s.n ? (s.avg >= davg ? 'up' : 'down') : '')}</div>
+  <section class="panel"><div class="ph"><h2>Heures par semaine</h2><span class="note">${S.weeks[f]} → ${S.weeks[t]}</span></div><div class="chartw">${chartSvg(a, f, t, s.n ? s.avg : null)}</div></section>
+  <div class="s2">
+  <section class="panel"><div class="ph"><h2>Historique des grades</h2><span class="note">actuel : ${badge(a.grade)}</span></div>${hist.length ? `<div class="tl">` + hist.map(h => `<div class="tli${h.st === 'prevu' ? ' pv' : ''}"><i></i><div><b>${h.from ? `${badge(h.from)} <span class="note">→</span> ${badge(h.to)}` : badge(h.to)}</b><span>${esc(h.src)}${h.st === 'prevu' ? ' · décision non appliquée' : ''} · sem. du ${S.weeks[h.w] ?? '?'}${h.t ? ' · ' + new Date(h.t).toLocaleDateString('fr-FR') : ''}</span>${h.why ? `<em>${esc(h.why)}</em>` : ''}</div></div>`).join('') + `</div>` : '<p class="note">Aucun changement de grade enregistré.</p>'}</section>
+  <section class="panel"><div class="ph"><h2>Détail par semaine</h2></div><div class="wrapt" style="max-height:360px"><table><thead><tr><th>Semaine</th><th>Heures</th><th>Écart moy.</th><th></th></tr></thead><tbody>` +
+    wk.map(i => { const v = a.w[i], d = v == null || !s.n ? null : v - s.avg; return `<tr><td>${S.weeks[i]}</td><td class="hcell">${F(v)}</td><td class="hcell ${d == null ? '' : d >= 0 ? 'pos' : 'neg'}">${d == null ? '—' : Fd(d)}</td><td><span class="mini"><i style="width:${Math.min(100, (v || 0) / BAR_MAX * 100)}%"></i></span></td></tr>`; }).join('') + `</tbody></table></div></section>
+  </div>
+  <section class="panel"><div class="ph"><h2>Cérémonies & suivi</h2><span class="note">${cer.length} cérémonie(s) · ${nS} sanction(s) · ${nA} absence(s)</span></div>${cer.length ? `<div class="wrapt"><table><thead><tr><th>Semaine</th><th>Décision</th><th>Sanction</th><th>Casiers</th><th>Forma PS</th><th>Forma 10-20</th><th>Fusillade</th><th>Absence</th><th>Explication</th><th>Notes</th></tr></thead><tbody>` +
+    cer.map(o => { const d = o.d, x = S.actions.find(y => y.id === d.a); return `<tr><td>${o.wk}</td><td>${x ? `${sym(x)} ${esc(x.label)}${d.g ? ` → ${esc(d.g)}` : ''}${d.done ? '' : ' <span class="note">(prévu)</span>'}` : '—'}</td><td>${esc(d.sanction || '—')}</td><td>${esc(d.casiers ?? '—')}</td><td>${yes(d.fps)}</td><td>${yes(d.f1020)}</td><td>${yes(d.fus)}</td><td>${yes(d.abs)}</td><td>${esc(d.r || '—')}</td><td>${esc(d.notes || '—')}</td></tr>`; }).join('') + `</tbody></table></div>` : '<p class="note">Aucune cérémonie avec des données pour cet agent.</p>'}</section>`;
 }
 function vSta() {
   if (st.id && !S.agents.some(a => a.id === st.id)) st.id = null;
   const a = S.agents.find(x => x.id === st.id);
-  return `<div class="sgrid"><section class="panel sl"><h2>Agents</h2><input id="sas" placeholder="Rechercher un agent…" value="${esc(st.q)}" autocomplete="off"><div class="alist" id="alist">${aListHtml()}</div></section>
+  return `<div class="sgrid"><section class="panel sl"><div class="ph"><h2>Agents</h2><span class="note">${S.agents.length} · h. sem. ${S.weeks[lastW()]}</span></div><input id="sas" placeholder="Rechercher (nom, grade, matricule)…" value="${esc(st.q)}" autocomplete="off"><div class="alist" id="alist">${aListHtml()}</div></section>
   <div class="sd">${a ? staDetail(a) : '<section class="panel"><h2>Sélectionne un agent</h2><p class="note">Choisis un agent dans la liste : tu verras toutes ses statistiques depuis le début du site — heures, moyennes sur la période de ton choix, changements de grade, sanctions et cérémonies.</p></section>'}</div></div>`;
 }
 
