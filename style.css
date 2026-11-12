@@ -452,3 +452,4 @@ tr.hr.empty .hag b{color:var(--mute)}
 td.lowc{color:var(--red);font-weight:700}
 html.light .hbar{background:rgba(150,100,50,.15)}html.light .hbar em{background:#3a2815}
 .panel.req{border-color:rgba(240,138,60,.45)}
+.wrapt.g th{top:0}.wrapt.g thead tr:first-child th:first-child{border-top-left-radius:var(--r)}.wrapt.g thead tr:first-child th:last-child{border-top-right-radius:var(--r)}
