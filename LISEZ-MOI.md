@@ -6,7 +6,7 @@ Site + **serveur** : les comptes, les rôles et les données sont stockés sur l
 InfinityFree n'exécute **pas Node.js** : `server.js` n'y tourne pas, d'où l'absence de synchronisation. Le site contient donc un serveur **PHP** équivalent (`api.php`, `discord.php`, `lib.php`).
 1. Envoie **tout le contenu du dossier** dans `htdocs/` (FTP ou gestionnaire de fichiers), y compris `.htaccess`.
 2. (Discord) Copie `config.example.php` en `config.php` et renseigne `discordClientId` / `discordClientSecret`.
-3. Dans le portail Discord › OAuth2 › Redirects, ajoute : `https://TON-DOMAINE/discord.php` (l'URL exacte est affichée dans Paramètres › Comptes utilisateurs).
+3. Dans le portail Discord › OAuth2 › Redirects, ajoute : `https://TON-DOMAINE/discord.php` (l'URL exacte est affichée dans Administration › Accès & comptes).
 4. Ouvre le site : le premier compte créé est administrateur. Le dossier `data/` est créé automatiquement (données protégées, non lisibles depuis le navigateur).
 - Active le **SSL gratuit** d'InfinityFree (https) : les cookies de session sont alors sécurisés.
 - Limite InfinityFree : ~50 000 requêtes/jour. La synchro interroge le serveur toutes les 5 s **seulement quand l'onglet est visible** (≈ 720 requêtes/heure par personne connectée).
@@ -33,16 +33,16 @@ Copie `config.example.json` en `config.json` :
 
 ## Connexion Discord
 1. https://discord.com/developers/applications → **New Application** → onglet **OAuth2**.
-2. **Redirects** → ajoute `<baseUrl>/discord.php` (ex. `http://localhost:3000/discord.php`). L'URL exacte est aussi affichée dans Paramètres › Comptes utilisateurs.
+2. **Redirects** → ajoute `<baseUrl>/discord.php` (ex. `http://localhost:3000/discord.php`). L'URL exacte est aussi affichée dans Administration › Accès & comptes.
 3. Copie le **Client ID** et le **Client Secret** dans `config.json`, relance le serveur.
 - Le **tout premier compte** (identifiant ou Discord) est administrateur.
-- Ensuite, une personne qui se connecte avec Discord apparaît dans **Paramètres › Comptes utilisateurs** avec le rôle **En attente** (pastille orange sur l'onglet Paramètres) ; tu lui choisis son rôle, et ça s'applique tout de suite chez elle, sans reconnexion. Tu vois son **pseudo Discord** à côté de son ID.
+- Ensuite, une personne qui se connecte avec Discord apparaît dans **Administration › Accès & comptes** avec le rôle **En attente** (pastille orange sur l'onglet Paramètres) ; tu lui choisis son rôle, et ça s'applique tout de suite chez elle, sans reconnexion. Tu vois son **pseudo Discord** à côté de son ID.
 - Tu peux aussi créer le compte à l'avance (identifiant + ID Discord, mot de passe facultatif).
 
 ## Connexion uniquement avec Discord
-Dès que Discord est configuré, **seule la connexion Discord est possible** : le formulaire identifiant / mot de passe disparaît et le serveur le refuse. Pour qu'un ancien compte (créé avec un mot de passe) puisse se connecter, renseigne son **ID Discord** dans Paramètres › Comptes utilisateurs. En cas de panne de Discord, `'passwordLogin' => true` dans `config.php` réactive temporairement les mots de passe.
+Dès que Discord est configuré, **seule la connexion Discord est possible** : le formulaire identifiant / mot de passe disparaît et le serveur le refuse. Pour qu'un ancien compte (créé avec un mot de passe) puisse se connecter, renseigne son **ID Discord** dans Administration › Accès & comptes. En cas de panne de Discord, `'passwordLogin' => true` dans `config.php` réactive temporairement les mots de passe.
 
-## Rôles et permissions (Paramètres › Rôles et accès — administrateurs)
+## Rôles et permissions (Administration › Accès & comptes — administrateurs)
 - **Onglets accessibles** par rôle : Effectifs, Heures, Importer, Cérémonie, Statistiques, Paramètres (grades, options de décision, sanctions).
 - **Permissions** par rôle (bouton « tout » pour tout cocher) :
   - Agents : créer · modifier · retirer

@@ -92,16 +92,41 @@ function vEff() {
     <select id="fg"><option value="">Tous les grades</option>${gopts(flt.g)}</select><select id="ew">${wopts(flt.w ?? S.weeks.length - 1)}</select><span class="note">${actv().length} agents</span>${S.agents.some(a => a.arch) || flt.arch ? `<button class="btn ghost${flt.arch ? ' on' : ''}" data-a="sharch">${flt.arch ? '← Effectif en service' : `Archivés (${S.agents.filter(a => a.arch).length})`}</button>` : ''}</div>
     <div id="list">${listHtml()}</div>`;
 }
+let hq = '', hg = ''; // recherche / filtre de grade de l'onglet Heures
+const minM = () => Math.round((S.minH ?? 10) * 60); // minimum d'heures par semaine (minutes)
+function hRow(a) { // une ligne de la vue « par semaine »
+  const v = a.w[hw], p = hw > 0 ? a.w[hw - 1] : null, mn = minM(), low = v != null && v < mn, d = v != null && p != null ? v - p : null;
+  return `<tr class="hr${low ? ' low' : ''}${v == null ? ' empty' : ''}" data-row="${a.id}" style="--c:${gradeColor(a.grade)}"><td><div class="hag"><span class="av">${esc(initials(a))}</span><span><b>${esc(full(a))}</b>${a.mat && a.mat !== '-' ? `<small class="mono">${esc(a.mat)}</small>` : ''}</span></div></td><td>${badge(a.grade)}</td>
+    <td class="hcell hprev">${F(p)}</td><td><input class="hin" data-a="hin" data-id="${a.id}" value="${v == null ? '' : F(v)}" placeholder="—" ${can('hoursEdit') ? '' : 'readonly'}></td>
+    <td><div class="hbar" title="Objectif ${F(mn)} · barre pleine à ${F(BAR_MAX)}"><i style="width:${Math.min(100, (v || 0) / BAR_MAX * 100)}%"></i><em style="left:${Math.min(100, mn / BAR_MAX * 100)}%"></em></div></td>
+    <td class="hcell hd ${d == null ? '' : d >= 0 ? 'pos' : 'neg'}">${d == null ? '—' : Fd(d)}</td></tr>`;
+}
+function hStats() {
+  const all = actv(), mn = minM(), vals = all.map(a => a.w[hw]), f = vals.filter(x => x != null), t = f.reduce((x, y) => x + y, 0), act = f.filter(x => x > 0).length;
+  const pt = hw > 0 ? all.reduce((x, a) => x + (a.w[hw - 1] || 0), 0) : null;
+  return { t, pt, act, avg: act ? t / act : 0, low: f.filter(x => x < mn).length, empty: vals.length - f.length, n: all.length };
+}
+function hCards() {
+  const s = hStats(), d = s.pt == null ? null : s.t - s.pt;
+  const card = (l, v, sub, cls = '') => `<div class="sk ${cls}"><span>${l}</span><b>${v}</b>${sub ? `<em>${sub}</em>` : ''}</div>`;
+  return card('Total de la semaine', F(s.t), d == null ? '' : `<i class="${d >= 0 ? 'pos' : 'neg'}">${Fd(d)}</i> vs semaine préc.`, 'hi') + card('Moyenne / agent actif', F(Math.round(s.avg)), `${s.act} agent(s) actif(s)`) +
+    card(`Sous le minimum (${F(minM())})`, s.low, 'heures saisies insuffisantes', s.low ? 'down' : '') + card('Non renseignés', s.empty, `sur ${s.n} agent(s)`, s.empty ? 'warn' : '');
+}
 function vHrs() {
   if (hw == null || hw >= S.weeks.length) hw = S.weeks.length - 1;
-  const bar = `<div class="frm"><select id="hw" ${hall ? 'hidden' : ''}>${wopts(hw)}</select><button class="btn ghost" data-a="all">${hall ? 'Vue par semaine' : 'Voir toutes les semaines'}</button></div>`;
-  if (hall) return bar + `<p class="note">${can('hoursEdit') ? 'Clique sur une case pour modifier les heures.' : 'Lecture seule : ton rôle ne permet pas de modifier les heures.'}</p><div class="wrapt g"><table><thead><tr><th>Agent</th>${S.weeks.map(w => `<th>${w}</th>`).join('')}<th>Total</th></tr></thead><tbody>` +
-    sorted().map(a => `<tr><td>${esc(full(a))}<small>${esc(a.mat)} · ${esc(a.grade)}</small></td>` +
-      S.weeks.map((_, j) => `<td class="c${can('hoursEdit') ? '' : ' ro'}" ${can('hoursEdit') ? 'data-a="cell"' : ''} data-id="${a.id}" data-j="${j}" style="background:rgba(232,135,58,${a.w[j] == null ? 0 : Math.min(.55, a.w[j] / 5400)})">${F(a.w[j])}</td>`).join('') +
+  const seg = `<div class="segs"><button class="seg${hall ? '' : ' on'}" data-a="hmode" data-v="0">Par semaine</button><button class="seg${hall ? ' on' : ''}" data-a="hmode" data-v="1">Toutes les semaines</button></div>`;
+  const filt = `<input id="hq" placeholder="Rechercher un agent…" value="${esc(hq)}" style="flex:1;min-width:180px"><select id="hg"><option value="">Tous les grades</option>${gopts(hg)}</select>`;
+  const L = sorted().filter(a => (!hg || a.grade === hg) && (!hq || norm(full(a) + ' ' + a.mat).includes(norm(hq))));
+  if (hall) return `<div class="frm htool">${seg}${filt}</div><p class="note">${can('hoursEdit') ? 'Clique sur une case pour modifier les heures.' : 'Lecture seule : ton rôle ne permet pas de modifier les heures.'}</p><div class="wrapt g"><table><thead><tr><th>Agent</th>${S.weeks.map(w => `<th>${w}</th>`).join('')}<th>Total</th></tr></thead><tbody>` +
+    L.map(a => `<tr><td>${esc(full(a))}<small>${esc(a.mat)} · ${esc(a.grade)}</small></td>` +
+      S.weeks.map((_, j) => `<td class="c${can('hoursEdit') ? '' : ' ro'}${a.w[j] != null && a.w[j] < minM() ? ' lowc' : ''}" ${can('hoursEdit') ? 'data-a="cell"' : ''} data-id="${a.id}" data-j="${j}" style="background:rgba(232,135,58,${a.w[j] == null ? 0 : Math.min(.55, a.w[j] / 5400)})">${F(a.w[j])}</td>`).join('') +
       `<td><b>${F(tot(a))}</b></td></tr>`).join('') + `</tbody></table></div>`;
-  const t = actv().reduce((x, a) => x + (a.w[hw] || 0), 0);
-  return bar + `<p class="note">Semaine du ${S.weeks[hw]} · total : <b id="ht">${F(t)}</b> · saisis les heures (12h30, 12:30 ou 12.5) puis Entrée ou Tab.</p><div class="wrapt"><table><thead><tr><th>Agent</th><th>Grade</th><th>Heures</th></tr></thead><tbody>` +
-    sorted().map(a => `<tr><td>${esc(full(a))}<small>${esc(a.mat)}</small></td><td>${badge(a.grade)}</td><td><input class="hin" data-a="hin" data-id="${a.id}" value="${a.w[hw] == null ? '' : F(a.w[hw])}" placeholder="0h00" ${can('hoursEdit') ? '' : 'readonly'}></td></tr>`).join('') + `</tbody></table></div>`;
+  return `<div class="frm htool"><div class="wnav"><button class="btn ghost" data-a="hprev" ${hw > 0 ? '' : 'disabled'} title="Semaine précédente">◀</button><select id="hw">${wopts(hw)}</select><button class="btn ghost" data-a="hnext" ${hw < S.weeks.length - 1 ? '' : 'disabled'} title="Semaine suivante">▶</button></div>${seg}${filt}
+    <label class="hmin" title="Minimum d’heures par semaine">Minimum <input data-a="hmin" type="number" min="0" step="0.5" value="${S.minH ?? 10}" ${can('hoursEdit') ? '' : 'disabled'}> h</label></div>
+    <div class="skg hcards" id="hcards">${hCards()}</div>
+    <p class="note">Semaine du <b>${S.weeks[hw]}</b>${hw > 0 ? ` · semaine précédente : ${S.weeks[hw - 1]}` : ''} · saisis les heures (12h30, 12:30 ou 12.5) puis Entrée ou Tab.</p>
+    <div class="wrapt"><table class="htab"><thead><tr><th>Agent</th><th>Grade</th><th>Sem. préc.</th><th>Heures</th><th title="Le trait vertical marque le minimum">Progression</th><th>Écart</th></tr></thead><tbody>` +
+    L.map(hRow).join('') + `</tbody></table></div>${L.length ? '' : '<p class="note">Aucun agent.</p>'}`;
 }
 function vImp() {
   if (!can('hoursImport')) return '<section class="panel"><h2>Importer des heures</h2><p class="note">Lecture seule : ton rôle ne permet pas d’importer des heures.</p></section>';
@@ -154,7 +179,6 @@ function recap() {
 const lockFs = (perm, html) => can(perm) ? html : `<fieldset class="ro" disabled title="Ton rôle ne permet pas de modifier cette section">${html}</fieldset>`;
 const mgr = () => admin || can('usersManage'); // gestion des comptes (non administrateurs)
 function vSet() {
-  if (!admin && !(roleOf(me).tabs || []).includes('set')) return usersPanel(); // accès uniquement via « Gérer les comptes »
   return `<section class="panel"><h2>Grades (du plus haut au plus bas)</h2>${can('gradeEdit') ? '' : '<p class="note">Lecture seule.</p>'}` + lockFs('gradeEdit', 
     S.grades.map((g, i) => `<div class="frm srow gr"><button class="btn ghost" data-a="gup" data-i="${i}" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost" data-a="gdn" data-i="${i}" ${i < S.grades.length - 1 ? '' : 'disabled'}>▼</button><input data-a="gname" data-i="${i}" value="${esc(g)}"><input type="color" class="col" data-a="gcol" data-i="${i}" value="${gradeColor(g)}" title="Couleur du grade"><button class="btn ghost" data-a="gcolr" data-i="${i}" title="Couleur par défaut">↺</button><span class="note">${S.agents.filter(a => a.grade === g).length} agent(s)</span><button class="btn del" data-a="gdel" data-i="${i}">Retirer</button></div>`).join('') +
     `<div class="frm"><input id="gn" placeholder="Nouveau grade (ajouté en bas, puis déplace-le avec ▲)"><button class="btn gold" data-a="gadd">Ajouter</button></div>`) + `</section>
@@ -166,32 +190,38 @@ function vSet() {
     `<div class="frm"><input id="an2" placeholder="Nouvelle option"><select id="ae">${effOpts(0)}</select><select id="at" hidden>${gopts(S.grades[0])}</select><button class="btn gold" data-a="aadd">Ajouter</button></div>`) + `</section>
   <section class="panel"><h2>Sanctions (menu déroulant de la cérémonie)</h2>` + lockFs('sanctionEdit',
     S.sanctions.map((x, i) => `<div class="frm srow sa">${mvBtns('s', i, S.sanctions.length)}<input data-a="sname" data-i="${i}" value="${esc(x)}"><button class="btn del" data-a="sdel" data-i="${i}">Retirer</button></div>`).join('') +
-    `<div class="frm"><input id="sn" placeholder="Nouvelle sanction (ex : Mise à pied 48h)"><button class="btn gold" data-a="sadd">Ajouter</button></div>`) + `</section>` + (admin ? rolesPanel() : '') + (mgr() ? usersPanel() : '');
+    `<div class="frm"><input id="sn" placeholder="Nouvelle sanction (ex : Mise à pied 48h)"><button class="btn gold" data-a="sadd">Ajouter</button></div>`) + `</section>`;
+}
+function vAcc() { // Administration › Accès & comptes : demandes d'accès, comptes, rôles et permissions
+  return usersPanel() + (admin ? rolesPanel() : '');
 }
 
-const views = { eff: vEff, hrs: vHrs, imp: vImp, cer: vCer, set: vSet, sta: vSta, med: vMed };
-const TITLES = { eff: 'Effectifs', hrs: 'Heures de service', imp: 'Importer des heures', cer: 'Cérémonie', set: 'Paramètres', sta: 'Statistiques agent', med: 'Médailles & rubans' };
-const TSUB = { eff: 'Liste des agents du district, grades et matricules', hrs: 'Saisie et suivi des heures de service semaine par semaine', imp: 'Import en masse des heures depuis ta feuille', cer: 'Décisions, sanctions et notes de la cérémonie', set: 'Grades, options de décision, sanctions, rôles et comptes', sta: 'Heures, grades, sanctions et historique de chaque agent depuis le début', med: 'Rubans de service, médailles et synchronisation avec le Google Sheet' };
-const TICON = { eff: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.8 0 4.5 1.9 4.5 4.5"/>', hrs: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', imp: '<path d="M12 3v12m0 0-4-4m4 4 4-4M4 20h16"/>', cer: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', set: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>', sta: '<path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/>', med: '<path d="M8 2h8l-2.5 7h-3z"/><circle cx="12" cy="15" r="6"/><path d="m12 12 .9 1.9 2.1.3-1.5 1.4.4 2.1-1.9-1-1.9 1 .4-2.1-1.5-1.4 2.1-.3z"/>' };
+const views = { eff: vEff, hrs: vHrs, imp: vImp, cer: vCer, set: vSet, sta: vSta, med: vMedMain, acc: vAcc, mda: vMda };
+const TITLES = { eff: 'Effectifs', hrs: 'Heures de service', imp: 'Importer des heures', cer: 'Cérémonie', set: 'Personnalisation', sta: 'Statistiques agent', med: 'Médailles & rubans', acc: 'Accès & comptes', mda: 'Gestion des médailles' };
+const TSUB = { eff: 'Liste des agents du district, grades et matricules', hrs: 'Saisie et suivi des heures de service semaine par semaine', imp: 'Import en masse des heures depuis ta feuille', cer: 'Décisions, sanctions et notes de la cérémonie', set: 'Grades, options de décision, sanctions et rangs masqués', sta: 'Heures, grades, sanctions et historique de chaque agent depuis le début', med: 'Rubans de service à remettre et médailles des agents', acc: 'Demandes d’accès, comptes utilisateurs, rôles et permissions', mda: 'Catalogue des médailles et rubans, synchronisation avec le Google Sheet' };
+const TICON = { eff: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.8 0 4.5 1.9 4.5 4.5"/>', hrs: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', imp: '<path d="M12 3v12m0 0-4-4m4 4 4-4M4 20h16"/>', cer: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', set: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>', sta: '<path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/>', med: '<path d="M8 2h8l-2.5 7h-3z"/><circle cx="12" cy="15" r="6"/><path d="m12 12 .9 1.9 2.1.3-1.5 1.4.4 2.1-1.9-1-1.9 1 .4-2.1-1.5-1.4 2.1-.3z"/>', acc: '<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>', mda: '<path d="M8 2h8l-2.5 7h-3z"/><circle cx="12" cy="15" r="6"/><path d="M12 12v6M9 15h6"/>' };
 function render() {
   if (!canTab(tab)) tab = TABS.find(canTab) || null; // onglet non autorisé -> 1er onglet accessible
   document.querySelectorAll('#nav button[data-t]').forEach(b => { b.hidden = !canTab(b.dataset.t); b.classList.toggle('on', b.dataset.t === tab); });
-  $('#gadm').hidden = $('#nav [data-t="set"]').hidden;
+  $('#gadm').hidden = ['set', 'acc', 'mda'].every(t => $(`#nav [data-t="${t}"]`).hidden);
   $('#pt').textContent = tab ? TITLES[tab] : 'Accès restreint';
   $('#psub').textContent = tab ? (tab === 'eff' ? `${actv().length} agent(s) en service · ` : '') + TSUB[tab] : 'Aucun onglet n’est autorisé pour ton rôle.';
   $('#pic').innerHTML = tab ? `<svg viewBox="0 0 24 24">${TICON[tab]}</svg>` : '';
-  const kw = [...S.weeks.keys()].reverse().find(j => actv().some(a => a.w[j] > 0)) ?? S.weeks.length - 1;
-  const hs = actv().map(a => a.w[kw]).filter(x => x != null), act = hs.filter(x => x > 0), tt = hs.reduce((x, y) => x + y, 0);
-  $('#kpi').innerHTML = !tab ? '' : [[actv().length, 'Agents'], [F(tt), `Heures · sem. du ${S.weeks[kw]}`], [act.length, 'Agents actifs'], [F(act.length ? Math.round(tt / act.length) : 0), 'Moyenne / actif']]
-    .map(([b, l], i) => `<div class="kpi k${i}"><span>${l}</span><b>${b}</b></div>`).join('');
+  setKpi();
   $('#view').innerHTML = tab ? views[tab]() : me?.role === 'pending'
     ? `<section class="panel"><h2>Compte en attente de validation</h2><p class="note">Tu es connecté avec Discord, mais aucun rôle ne t’a encore été attribué. Communique ton ID Discord à un administrateur : <b class="mono">${esc(me.discordId || '')}</b></p></section>`
     : '<section class="panel"><h2>Aucun accès</h2><p class="note">Ton rôle n’a accès à aucun onglet. Demande à un administrateur de modifier tes accès.</p></section>';
-  { const pend = mgr() ? users.filter(u => u.role === 'pending').length : 0, sb = $('#nav [data-t="set"]'); if (pend) sb.dataset.n = pend; else delete sb.dataset.n; }
+  { const pend = mgr() ? users.filter(u => u.role === 'pending').length : 0, sb = $('#nav [data-t="acc"]'); if (pend) sb.dataset.n = pend; else delete sb.dataset.n; }
   if (me) { $('#un').textContent = me.name; $('#ur').textContent = roleOf(me).name; { const dp = me.dname ? (me.dun ? '@' + me.dun : me.dname) : ''; $('#ud').textContent = dp; $('#ud').hidden = !dp; } { const av = me.discordId && me.avatar ? `https://cdn.discordapp.com/avatars/${me.discordId}/${me.avatar}.png?size=64` : ''; $('#uav').style.backgroundImage = av ? `url(${av})` : ''; $('#uav').textContent = av ? '' : me.name.slice(0, 2); } $('#ucard').classList.toggle('adm', admin); $('#rn').textContent = roleOf(me).name; $('#rl').textContent = admin ? 'accès total' : `${roleOf(me).tabs.length} onglet(s) · ${(roleOf(me).perms || []).length} permission(s)`; }
   setTopH();
   $('#pw').hidden = !pwdOn;
   $('#bk').hidden = !can('dataBackup'); $('#rz').hidden = $('#rs').parentElement.hidden = !can('dataReset');
+}
+function setKpi() {
+  const kw = [...S.weeks.keys()].reverse().find(j => actv().some(a => a.w[j] > 0)) ?? S.weeks.length - 1;
+  const hs = actv().map(a => a.w[kw]).filter(x => x != null), act = hs.filter(x => x > 0), tt = hs.reduce((x, y) => x + y, 0);
+  $('#kpi').innerHTML = !tab ? '' : [[actv().length, 'Agents'], [F(tt), `Heures · sem. du ${S.weeks[kw]}`], [act.length, 'Agents actifs'], [F(act.length ? Math.round(tt / act.length) : 0), 'Moyenne / actif']]
+    .map(([b, l], i) => `<div class="kpi k${i}"><span>${l}</span><b>${b}</b></div>`).join('');
 }
 function setTopH() { const t = $('.top'), m = $('.main'); if (t && m) m.style.setProperty('--toph', t.offsetHeight - 22 + 'px'); const h = $('.cer thead tr'); if (h && m) m.style.setProperty('--h1', h.offsetHeight + 'px'); } // hauteur de l'en-tête collant (les en-têtes de tableau se placent dessous)
 addEventListener('resize', setTopH);
@@ -273,9 +303,9 @@ function doImport() {
     } else unk.push(L.name || line.trim());
   }
   save();
-  $('#ir').innerHTML = `<b>${ok}</b> mis à jour (semaine du ${S.weeks[wi]})${cr ? `, <b>${cr}</b> créé(s)` : ''}${gch ? `, <b>${gch}</b> grade(s) modifié(s)` : ''}.` + (ignored.length ? `<br>Ignorés (rang ${(S.ignRanks || []).map(esc).join(' / ')}) : ${ignored.map(esc).join(', ')}` : '') + (archHit.length ? `<br>Agent(s) archivé(s) présents dans la liste (heures enregistrées, toujours archivés) : ${archHit.map(esc).join(', ')}` : '') + (newG.length ? `<br>Grade(s) créé(s) : <b>${newG.map(esc).join(', ')}</b> — vérifie leur place dans Paramètres › Grades.` : '') +
+  $('#ir').innerHTML = `<b>${ok}</b> mis à jour (semaine du ${S.weeks[wi]})${cr ? `, <b>${cr}</b> créé(s)` : ''}${gch ? `, <b>${gch}</b> grade(s) modifié(s)` : ''}.` + (ignored.length ? `<br>Ignorés (rang ${(S.ignRanks || []).map(esc).join(' / ')}) : ${ignored.map(esc).join(', ')}` : '') + (archHit.length ? `<br>Agent(s) archivé(s) présents dans la liste (heures enregistrées, toujours archivés) : ${archHit.map(esc).join(', ')}` : '') + (newG.length ? `<br>Grade(s) créé(s) : <b>${newG.map(esc).join(', ')}</b> — vérifie leur place dans Administration › Personnalisation.` : '') +
     (unk.length ? `<br>Non reconnus (coche « Créer les agents inconnus » pour les ajouter) : ${unk.map(esc).join(', ')}` : '') +
-    (badG.size ? `<br>Rangs absents de la liste des grades (ignorés${$('#ic').checked ? ` ; agents créés en ${esc(low)}` : ''}) : ${[...badG].map(esc).join(', ')} — ajoute-les dans Paramètres › Grades si besoin.` : '');
+    (badG.size ? `<br>Rangs absents de la liste des grades (ignorés${$('#ic').checked ? ` ; agents créés en ${esc(low)}` : ''}) : ${[...badG].map(esc).join(', ')} — ajoute-les dans Administration › Personnalisation si besoin.` : '');
 }
 function unlock(a) { // admin : annule l'application d'une décision déjà validée
   const d = (S.ceremonies[S.weeks[cw]] || {})[a.id];
@@ -328,6 +358,8 @@ document.addEventListener('click', async e => {
     upd();
   } else if (act === 'import') doImport();
   else if (act === 'all') { hall = !hall; render(); }
+  else if (act === 'hmode') { hall = el.dataset.v === '1'; render(); }
+  else if (act === 'hprev' || act === 'hnext') { hw = Math.max(0, Math.min(S.weeks.length - 1, hw + (act === 'hprev' ? -1 : 1))); render(); }
   else if (act === 'aup' || act === 'adn') { swap(S.actions, +el.dataset.i, act === 'aup' ? -1 : 1); upd(); }
   else if (act === 'sup' || act === 'sdn') { swap(S.sanctions, +el.dataset.i, act === 'sup' ? -1 : 1); upd(); }
   else if (act === 'uadd') {
@@ -396,6 +428,8 @@ document.addEventListener('change', e => {
   if (el.id === 'cw') { cw = +el.value; render(); }
   else if (el.id === 'fg') { flt.g = el.value; $('#list').innerHTML = listHtml(); }
   else if (el.id === 'hw') { hw = +el.value; render(); }
+  else if (el.id === 'hg') { hg = el.value; render(); }
+  else if (act === 'hmin') { if (!can('hoursEdit')) return; const v = parseFloat(String(el.value).replace(',', '.')); if (v >= 0) { S.minH = v; upd(); } }
   else if (el.id === 'pf') { st.f = +el.value; if (st.t != null && st.t < st.f) st.t = st.f; render(); }
   else if (el.id === 'pe') { st.t = +el.value; if (st.f > st.t) st.f = st.t; render(); }
   else if (el.id === 'ew') { flt.w = +el.value; $('#list').innerHTML = listHtml(); }
@@ -425,7 +459,8 @@ document.addEventListener('change', e => {
     const a = S.agents.find(x => x.id === el.dataset.id), v = el.value.trim(), n = v ? tparse(v, true) : null;
     if (v && n == null) { el.value = a.w[hw] == null ? '' : F(a.w[hw]); return; }
     a.w[hw] = n; el.value = n == null ? '' : F(n); save();
-    $('#ht').textContent = F(actv().reduce((x, y) => x + (y.w[hw] || 0), 0));
+    const tr = el.closest('tr[data-row]'); if (tr) { const t = document.createElement('tbody'); t.innerHTML = hRow(a); const nr = t.firstElementChild; ['hbar', 'hd'].forEach(c => { const o = tr.querySelector('.' + c)?.closest('td'), x = nr.querySelector('.' + c)?.closest('td'); if (o && x) o.replaceWith(x); }); tr.className = nr.className; }
+    if ($('#hcards')) $('#hcards').innerHTML = hCards(); setKpi();
   } else if (act === 'gname') {
     const i = +el.dataset.i, old = S.grades[i], nv = el.value.trim();
     if (!nv || (nv !== old && S.grades.includes(nv))) { el.value = old; return; }
@@ -463,6 +498,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'q') { flt.q = e.target.value; $('#list').innerHTML = listHtml(); }
+  else if (e.target.id === 'hq') { hq = e.target.value; render(); const i = $('#hq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
   else if (e.target.id === 'sas') { st.q = e.target.value; $('#alist').innerHTML = aListHtml(); }
 });
 $('#nav').addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (b && canTab(b.dataset.t)) { tab = b.dataset.t; render(); } });
@@ -481,7 +517,7 @@ $('#rs').onchange = async e => {
 };
 $('#rz').onclick = async () => { if (can('dataReset') && await dlg({ title: 'Réinitialiser', msg: 'Tout réinitialiser avec les données de départ ? Les modifications actuelles seront perdues.', ok: 'Réinitialiser', danger: true })) { S = migrate(seed()); upd(); } };
 // ---------- connexion & synchronisation avec le serveur (server.js) ----------
-const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set'];
+const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set', 'acc', 'mda'];
 const PERM_GROUPS = [
   ['Agents', [['agentAdd', 'Créer'], ['agentEdit', 'Modifier'], ['agentDel', 'Archiver / suppr.']]],
   ['Heures', [['hoursEdit', 'Saisir'], ['hoursImport', 'Importer'], ['weekAdd', 'Ajouter semaine']]],
@@ -493,7 +529,7 @@ const PERMS = PERM_GROUPS.flatMap(g => g[1]);
 let pwdOn = true, roles = [], users = [], firstRun = false, discordOn = false, redirUrl = '', dcMsg = '';
 let SV = 0, VV = 0, S0 = null, saving = false, dirty = false, saveTimer = null, needRender = false;
 const roleOf = u => roles.find(r => r.id === u.role) || roles.find(r => r.id === 'user') || { name: '?', tabs: [], perms: [] };
-const canTab = t => !!me && !!t && (admin || (roleOf(me).tabs || []).includes(t));
+const canTab = t => !!me && !!t && (t === 'acc' ? admin || can('usersManage') : t === 'mda' ? can('medalEdit') || can('sheetSync') : admin || (roleOf(me).tabs || []).includes(t)); // acc / mda : selon les permissions
 const can = p => !!me && (admin || (roleOf(me).perms || []).includes(p)); // permissions fines (voir « Rôles et accès »)
 const clone = x => JSON.parse(JSON.stringify(x));
 const setSync = (s, tip) => { const l = $('#syled'); if (l) { l.dataset.s = s; l.title = tip; } };
@@ -616,7 +652,7 @@ async function adminCall(method, url, body) { // action d'administration : le se
 }
 const dpseudo = u => u.dname ? (u.dun && u.dun !== u.dname ? `${u.dname} (@${u.dun})` : u.dname) : '';
 function rolesPanel() {
-  const T = [['eff', 'Effectifs'], ['hrs', 'Heures'], ['imp', 'Importer'], ['cer', 'Cérémonie'], ['sta', 'Statistiques'], ['med', 'Médailles'], ['set', 'Paramètres']];
+  const T = [['eff', 'Effectifs'], ['hrs', 'Heures'], ['imp', 'Importer'], ['cer', 'Cérémonie'], ['sta', 'Statistiques'], ['med', 'Médailles'], ['set', 'Personnalisation']];
   const box = (attrs, on, dis) => `<td class="ck"><label class="chk"><input type="checkbox" ${attrs} ${on ? 'checked' : ''} ${dis ? 'disabled' : ''}><span></span></label></td>`;
   const nUsers = r => users.filter(u => u.role === r.id).length;
   return `<section class="panel"><h2>Rôles et accès</h2><p class="note">Pour chaque rôle : les onglets visibles, puis les actions autorisées. « Gérer comptes » permet de valider les comptes en attente et de gérer les comptes non administrateurs (sans toucher aux rôles). Le panneau « Rôles et accès » reste réservé aux administrateurs.</p>
@@ -637,11 +673,13 @@ function usersPanel() {
     return `<div class="frm${u.role === 'pending' ? ' pend' : ''}">${avHtml(u)}<b class="uname">${esc(u.name)}${u.id === me?.id ? ' <span class="note">(toi)</span>' : ''}${u.role === 'pending' ? ' <span class="tag">En attente</span>' : ''}</b>` +
       `<input class="ein" style="width:170px" data-a="udid" data-id="${u.id}" placeholder="ID Discord" value="${esc(u.discordId || '')}" ${lockU ? 'disabled' : ''}>` +
       `<span class="dpn${u.dname ? ' on' : ''}" title="Pseudo Discord (rempli automatiquement à la connexion avec Discord)"><svg viewBox="0 0 24 24"><path d="M7.2 6.2c1.6-.7 3.3-1 4.8-1s3.2.3 4.8 1l1.7 1.9c1.4 2.6 2 5.4 1.8 8.4-1.4 1.1-3.1 1.8-4.4 2.1l-1.1-1.7c.9-.2 1.7-.6 2.4-1.1-.2-.1-.5-.3-.7-.5-2.3 1-5.1 1-7.4 0-.2.2-.5.4-.7.5.7.5 1.5.9 2.4 1.1l-1.1 1.7c-1.3-.3-3-1-4.4-2.1-.2-3 .4-5.8 1.8-8.4z"/></svg>${u.dname ? esc(dpseudo(u)) : '<i>non connecté avec Discord</i>'}</span>` +
-      (lockU ? `<span class="tag">${esc(roleOf(u).name)}</span>` : `<select class="cin" data-a="urole" data-id="${u.id}">${ro(u.role)}</select>${pwdOn ? `<button class="btn ghost" data-a="upw" data-id="${u.id}">Mot de passe</button>` : ''}${u.id === me?.id ? '' : `<button class="btn del" data-a="udel" data-id="${u.id}">Retirer</button>`}`) + `</div>`;
+      (lockU ? `<span class="tag">${esc(roleOf(u).name)}</span>` : `<select class="cin" data-a="urole" data-id="${u.id}">${ro(u.role)}</select>${pwdOn ? `<button class="btn ghost" data-a="upw" data-id="${u.id}">Mot de passe</button>` : ''}${u.id === me?.id ? '' : `<button class="btn del" data-a="udel" data-id="${u.id}">${u.role === 'pending' ? 'Refuser' : 'Retirer'}</button>`}`) + `</div>`;
   };
-  return `<section class="panel"><h2>Comptes utilisateurs <span class="note">(${users.length})</span></h2><p class="note">Les comptes sont enregistrés sur le serveur et partagés entre tous les ordinateurs. Le rôle de chaque compte détermine les onglets et les actions autorisés (voir « Rôles et accès »).</p>
+  const pend = users.filter(u => u.role === 'pending');
+  return `<section class="panel req"><h2>Demandes d’accès <span class="note">(${pend.length})</span></h2>${pend.length ? '<p class="note">Personnes connectées avec Discord en attente d’un rôle : choisis leur rôle pour leur donner accès, ou refuse la demande.</p>' + pend.map(row).join('') : '<p class="note">Aucune demande en attente.</p>'}</section>
+  <section class="panel"><h2>Comptes utilisateurs <span class="note">(${users.length - pend.length})</span></h2><p class="note">Les comptes sont enregistrés sur le serveur et partagés entre tous les ordinateurs. Le rôle de chaque compte détermine les onglets et les actions autorisés (voir « Rôles et accès »).</p>
   ${admin ? `<p class="note">Connexion Discord : <b>${discordOn ? 'configurée' : 'non configurée'}</b> · URL de redirection à enregistrer dans le portail Discord : <code class="mono">${esc(redirUrl)}</code></p>` : ''}<p class="note">Quand quelqu’un se connecte avec Discord pour la première fois, son compte apparaît ci-dessous avec le rôle « En attente » et son pseudo Discord : choisis-lui simplement son rôle. Tu peux aussi créer son compte à l’avance avec son ID Discord.</p>` +
-    [...users].sort((a, b) => (b.role === 'pending') - (a.role === 'pending')).map(row).join('') +
+    (users.filter(u => u.role !== 'pending').map(row).join('') || '<p class="note">Aucun compte.</p>') +
     `<div class="frm"><input id="nu" placeholder="Identifiant" autocomplete="off"><input id="nd" placeholder="ID Discord${pwdOn ? ' (optionnel)' : ''}" autocomplete="off">${pwdOn ? '<input id="np" type="password" placeholder="Mot de passe (facultatif avec Discord)" autocomplete="new-password">' : ''}<select id="nr">${ro('user')}</select><button class="btn gold" data-a="uadd">Créer le compte</button></div></section>`;
 }
 
@@ -760,7 +798,7 @@ function previewHtml() {
     `<div class="frm"><button class="btn gold" data-a="mapply">Appliquer les changements cochés</button><button class="btn ghost" data-a="mcancel">Annuler</button></div></div>`;
 }
 let mq = '';
-function vMed() {
+function vMed(part) {
   const ed = can('medalEdit'), list = byGrade(actv()).filter(a => !mq || norm(full(a) + ' ' + a.mat + ' ' + a.grade).includes(norm(mq)));
   const due = []; actv().forEach(a => S.medals.forEach(md => { const s = medState(a, md); if (md.months && s.earned && !s.given) due.push({ a, md, s }); }));
   due.sort((p, q) => p.s.earned.localeCompare(q.s.earned));
@@ -781,7 +819,11 @@ function vMed() {
       return `<tr><td>${esc(full(a))} ${badge(a.grade)}</td><td>${ed ? `<input type="date" class="cin" data-a="marr" data-id="${a.id}" value="${a.arr || ''}">` : fmtD(a.arr)}</td><td class="mono">${anc(a.arr)}</td><td><span class="mrow">${medRow(a)}${ed ? agentMedals(a).filter(o => !o.md.months).map(o => `<button class="mx" data-a="munaward" data-id="${a.id}" data-m="${o.md.id}" title="Retirer « ${esc(o.md.name)} »">✕</button>`).join('') : ''}</span></td>
         <td>${nx ? `<span class="mrow">${medIcon(nx.md, 'sm')} <span class="note">dans ${daysUntil(nx.s.due)} j (${fmtD(nx.s.due)})</span></span>` : a.arr ? '<span class="note">tous obtenus</span>' : '<span class="note">date d’arrivée inconnue</span>'}</td>
         ${ed && manual.length ? `<td><select class="cin" data-a="maward" data-id="${a.id}"><option value="">+ Médaille…</option>${manual.filter(m => !medState(a, m).earned).map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></td>` : ''}</tr>`; }).join('') + `</tbody></table></div>${list.length ? '' : '<p class="note">Aucun agent.</p>'}</section>`;
-  return syncPanel + dueP + cat + tbl;
+  return part === 'admin' ? syncPanel + cat : dueP + tbl;
+}
+function vMda() { return vMed('admin'); }
+function vMedMain() {
+  return vMed('main') + (can('medalEdit') || can('sheetSync') ? '<p class="note">Catalogue des médailles et synchronisation Google Sheet : Administration › Gestion des médailles.</p>' : '');
 }
 function medImg(file) { // image redimensionnée (96 px max) pour rester légère dans la base
   return new Promise((ok, no) => { const fr = new FileReader(); fr.onerror = no; fr.onload = () => { const im = new Image(); im.onerror = no; im.onload = () => {

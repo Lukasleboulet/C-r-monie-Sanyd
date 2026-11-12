@@ -431,3 +431,24 @@ td.ck>.chk{display:flex;justify-content:center;align-items:center}
 .ptab2 tr.pgr td{padding:9px 16px 6px;background:rgba(240,138,60,.07);color:var(--acc2);font:700 .66rem Inter,sans-serif;letter-spacing:.12em;text-transform:uppercase}
 html.light .ptab2 tr.pgr td{background:rgba(224,115,31,.08);color:var(--t)}
 .rmv{display:inline-flex;gap:4px;margin-right:8px;vertical-align:middle}.rmv .btn{padding:4px 8px;font-size:.7rem}
+/* ---------- onglet Heures (refonte) ---------- */
+.htool{align-items:center;gap:10px;flex-wrap:wrap}
+.wnav{display:inline-flex;align-items:center;gap:6px}.wnav .btn{padding:8px 11px}.wnav .cs{min-width:190px}
+.hmin{display:inline-flex;align-items:center;gap:6px;color:var(--mute);font-size:.82rem;white-space:nowrap}.hmin input{width:64px;padding:8px 8px;text-align:center}
+.hcards{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin:4px 0 14px}
+.hcards .sk em{display:block;font-style:normal;font-size:.76rem;color:var(--mute)}.sk.warn b{color:var(--acc2)}
+.pos{color:var(--green)}.neg{color:var(--red)}
+.htab td{padding:9px 16px}
+.hag{display:flex;align-items:center;gap:10px}.hag .av{margin:0;width:34px;height:34px;border-radius:10px;border-color:color-mix(in srgb,var(--c) 60%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--c) 35%,transparent),color-mix(in srgb,var(--c) 8%,transparent))}
+.hag>span:last-child{display:flex;flex-direction:column;line-height:1.25}.hag small{margin:0;font-size:.72rem}
+.hprev{color:var(--mute)}
+.htab .hin{width:110px;text-align:center;font:600 .95rem var(--mono)}
+.hbar{position:relative;width:100%;min-width:160px;max-width:340px;height:8px;border-radius:9px;background:rgba(255,255,255,.08)}
+.hbar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .25s}
+.hbar em{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;border-radius:2px;background:var(--fg);opacity:.55}
+tr.hr.low .hbar i{background:linear-gradient(90deg,#c9473f,var(--red))}
+tr.hr.low td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+tr.hr.empty .hag b{color:var(--mute)}
+td.lowc{color:var(--red);font-weight:700}
+html.light .hbar{background:rgba(150,100,50,.15)}html.light .hbar em{background:#3a2815}
+.panel.req{border-color:rgba(240,138,60,.45)}
