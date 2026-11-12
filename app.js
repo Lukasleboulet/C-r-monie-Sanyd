@@ -34,6 +34,17 @@ function seed() {
     ceremonies: {} // { "19/10": { agentId: {a: id de l’option, from, g, r, done} } }
   };
 }
+// Semaines « jj/mm » sans année : on déduit l'année (une date à plus de 2 semaines dans le futur = année précédente) pour les classer par date.
+function weekKey(w) { const [d, m] = String(w).split('/').map(Number), n = new Date(); let y = n.getFullYear(); if (new Date(y, m - 1, d) - n > 14 * 864e5) y--; return y * 10000 + m * 100 + d; }
+function sortWeeks(d) { // remet les semaines dans l'ordre chronologique, avec les heures et les références qui en dépendent
+  const p = d.weeks.map((w, i) => i).sort((a, b) => weekKey(d.weeks[a]) - weekKey(d.weeks[b]) || a - b);
+  if (p.every((x, i) => x === i)) return false;
+  const inv = []; p.forEach((o, n) => inv[o] = n);
+  d.weeks = p.map(i => d.weeks[i]);
+  d.agents.forEach(a => { a.w = p.map(i => a.w[i] ?? null); if (a.arch && a.arch.w != null) a.arch.w = inv[a.arch.w] ?? a.arch.w; });
+  (d.glog || []).forEach(g => { if (g.w != null && inv[g.w] != null) g.w = inv[g.w]; });
+  return true;
+}
 function migrate(d) { // le grade « Rookie-PPA » n'existe pas : fusionné dans « Rookie »
   const fix = g => g === 'Rookie-PPA' ? 'Rookie' : g;
   d.agents.forEach(a => a.grade = fix(a.grade));
@@ -45,6 +56,7 @@ function migrate(d) { // le grade « Rookie-PPA » n'existe pas : fusionné dans
   d.glog ||= [];
   d.medals ||= defaultMedals();
   d.medals.forEach(m => { if (m.months && !m.n) { m.n = m.months; m.u = 'm'; } delete m.months; }); // ancienneté : nombre + unité (j, s, m, a) d.awards ||= {}; d.sheet ||= { url: '', gid: '', district: 'Sandy Shore', gmap: {}, last: 0 };
+  sortWeeks(d);
   d.ignRanks ||= ['Patron', 'Sheriff']; // rangs ignorés à l'import et masqués (sauf agents ajoutés à la main)
   d.sanctions ||= [...DEFAULT_SANCTIONS];
   Object.values(d.ceremonies || {}).forEach(c => Object.values(c).forEach(x => ['fps', 'f1020', 'fus', 'abs'].forEach(k => { if (k in x && typeof x[k] !== 'boolean') x[k] = !!x[k] && x[k] !== 'Non'; })));
@@ -252,11 +264,12 @@ function dlg({ title = '', msg = '', input = null, password = false, ok = 'OK', 
 const mvBtns = (k, i, n) => `<button class="btn ghost" data-a="${k}up" data-i="${i}" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost" data-a="${k}dn" data-i="${i}" ${i < n - 1 ? '' : 'disabled'}>▼</button>`;
 const swap = (L, i, d) => { [L[i], L[i + d]] = [L[i + d], L[i]]; };
 async function addWeek() {
-  const [d, m] = S.weeks.at(-1).split('/').map(Number), t = new Date(2026, m - 1, d + 7);
+  const [d, m] = S.weeks.at(-1).split("/").map(Number), t = new Date(Math.floor(weekKey(S.weeks.at(-1)) / 10000), m - 1, d + 7);
   const def = String(t.getDate()).padStart(2, '0') + '/' + String(t.getMonth() + 1).padStart(2, '0');
   const v = await dlg({ title: 'Nouvelle semaine', msg: 'Début de la semaine (jj/mm)', input: def, ok: 'Ajouter', icon: 'cal' });
   if (!v || !/^\d{1,2}\/\d{1,2}$/.test(v.trim())) return;
-  S.weeks.push(v.trim()); S.agents.forEach(a => a.w.push(null)); cw = S.weeks.length - 1; upd();
+  if (S.weeks.includes(v.trim())) { await dlg({ title: 'Semaine existante', msg: `La semaine du ${v.trim()} existe déjà.`, cancel: null, icon: 'warn' }); return; }
+  S.weeks.push(v.trim()); S.agents.forEach(a => a.w.push(null)); sortWeeks(S); cw = hw = S.weeks.indexOf(v.trim()); upd();
 }
 // Lecture d'une ligne collée : colonnes (tabulations ou « ; ») « Nom ⇥ Rang ⇥ Part employé ⇥ Heures » (copie d'un tableau),
 // ou texte libre « Prénom Nom 43h30min ». Renvoie { name, grade, mins } ou null (en-tête, ligne TOTAL, ligne sans durée).
