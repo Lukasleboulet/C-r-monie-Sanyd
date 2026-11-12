@@ -725,7 +725,11 @@ function medState(a, md) { // { earned: date d'obtention ou null, due: date pré
 const medIcon = (md, cls = '') => md.img ? `<img class="mic ${cls}" src="${md.img}" alt="${esc(md.name)}" title="${esc(md.name)}">`
   : `<span class="mic rib ${cls}" style="--c:${esc(md.color || '#b8a47c')}" title="${esc(md.name)}">${md.n ? `<i>${durShort(md)}</i>` : ''}</span>`;
 function agentMedals(a) { return S.medals.map(md => ({ md, s: medState(a, md) })).filter(o => o.s.earned); }
-const medRow = a => agentMedals(a).map(({ md, s }) => s.given ? medIcon(md) : `<span class="mpend" title="${esc(md.name)} — obtenu le ${fmtD(s.earned)}, pas encore remis">${medIcon(md)}</span>`).join('') || '<span class="note">—</span>';
+const medRow = (a, click) => agentMedals(a).map(({ md, s }) => { // click : chaque ruban devient un bouton (remis <-> à remettre, ou retirer une médaille manuelle)
+  const tip = !md.n ? `${md.name} — attribuée le ${fmtD(s.earned)}${click ? ' · clic : retirer' : ''}` : s.given ? `${md.name} — remis${click ? ' · clic : annuler la remise' : ''}` : `${md.name} — obtenu le ${fmtD(s.earned)}, pas encore remis${click ? ' · clic : marquer remis' : ''}`;
+  const ic = s.given ? medIcon(md) : `<span class="mpend">${medIcon(md)}</span>`;
+  return click ? `<button type="button" class="mtg" data-a="mtog" data-id="${a.id}" data-m="${md.id}" title="${esc(tip)}">${ic}</button>` : `<span title="${esc(tip)}">${ic}</span>`;
+}).join('') || '<span class="note">—</span>';
 
 // --- Google Sheet : lecture CSV, analyse, aperçu des changements ---
 function csvParse(t) {
@@ -838,7 +842,7 @@ function vMed(part) {
     (ed ? `<div class="frm" style="margin-top:12px"><input id="mnn" placeholder="Nouvelle médaille (ex : Médaille du mérite)"><select id="mnt"><option value="0">Attribution manuelle</option><option value="1">Ancienneté</option></select><input id="mnn2" type="number" min="1" class="mdn" placeholder="Durée" title="Durée d’ancienneté"><select id="mnu">${uOpts('m')}</select><button class="btn gold" data-a="madd">Ajouter</button></div>` : '') + `</section>`;
   const tbl = `<section class="panel"><div class="ph"><h2>Agents</h2><input id="mq" placeholder="Rechercher…" value="${esc(mq)}" style="width:260px"></div><div class="wrapt"><table><thead><tr><th>Agent</th><th>Arrivée</th><th>Ancienneté</th><th>Médailles & rubans</th><th>Prochain ruban</th>${ed && manual.length ? '<th>Attribuer</th>' : ''}</tr></thead><tbody id="mtb">` +
     list.map(a => { const nx = S.medals.filter(m => m.n).map(md => ({ md, s: medState(a, md) })).filter(o => o.s.due && !o.s.earned).sort((p, q) => p.s.due.localeCompare(q.s.due))[0];
-      return `<tr><td>${esc(full(a))} ${badge(a.grade)}</td><td>${ed ? `<input type="date" class="cin" data-a="marr" data-id="${a.id}" value="${a.arr || ''}">` : fmtD(a.arr)}</td><td class="mono">${anc(a.arr)}</td><td><span class="mrow">${medRow(a)}${ed ? agentMedals(a).filter(o => !o.md.n).map(o => `<button class="mx" data-a="munaward" data-id="${a.id}" data-m="${o.md.id}" title="Retirer « ${esc(o.md.name)} »">✕</button>`).join('') : ''}</span></td>
+      return `<tr><td>${esc(full(a))} ${badge(a.grade)}</td><td>${ed ? `<input type="date" class="cin" data-a="marr" data-id="${a.id}" value="${a.arr || ''}">` : fmtD(a.arr)}</td><td class="mono">${anc(a.arr)}</td><td><span class="mrow">${medRow(a, ed)}</span></td>
         <td>${nx ? `<span class="mrow">${medIcon(nx.md, 'sm')} <span class="note">dans ${daysUntil(nx.s.due)} j (${fmtD(nx.s.due)})</span></span>` : a.arr ? '<span class="note">tous obtenus</span>' : '<span class="note">date d’arrivée inconnue</span>'}</td>
         ${ed && manual.length ? `<td><select class="cin" data-a="maward" data-id="${a.id}"><option value="">+ Médaille…</option>${manual.filter(m => !medState(a, m).earned).map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></td>` : ''}</tr>`; }).join('') + `</tbody></table></div>${list.length ? '' : '<p class="note">Aucun agent.</p>'}</section>`;
   // historique des remises (rubans marqués « remis » + médailles attribuées à la main), du plus récent au plus ancien
@@ -865,13 +869,20 @@ function medImg(file) { // image redimensionnée (96 px max) pour rester légèr
 document.addEventListener('click', async e => {
   const el = e.target.closest('[data-a]'); if (!el) return; const act = el.dataset.a, id = el.dataset.id;
   if (['msync', 'mapply', 'mcancel'].includes(act) && !can('sheetSync')) return;
-  if (['mgive', 'mgiveall', 'mungive', 'madd', 'mdel', 'mimgdel', 'munaward'].includes(act) && !can('medalEdit')) return;
+  if (['mgive', 'mgiveall', 'mungive', 'mtog', 'madd', 'mdel', 'mimgdel', 'munaward'].includes(act) && !can('medalEdit')) return;
   const aw = (aid, mid) => (((S.awards ||= {})[aid] ||= {})[mid] ||= {});
   if (act === 'msync') doSync();
   else if (act === 'mcancel') { syncP = null; render(); }
   else if (act === 'mapply') { const n = syncP.items.filter(i => i.on && i.k !== 'quiet').length; if (await dlg({ title: 'Appliquer la synchronisation', msg: `Appliquer ${n} changement(s) ?`, ok: 'Appliquer', icon: 'warn' })) { applySync(); await dlg({ title: 'Synchronisation terminée', msg: `${n} changement(s) appliqué(s).`, cancel: null, icon: 'info' }); } }
   else if (act === 'mgive') { Object.assign(aw(id, el.dataset.m), { given: Date.now(), by: me?.name || '' }); upd(); }
   else if (act === 'mungive') { const md = S.medals.find(x => x.id === el.dataset.m), a = S.agents.find(x => x.id === id); if (await dlg({ title: 'Annuler la remise', msg: `« ${md?.name} » de ${a ? full(a) : 'cet agent'} repassera dans « Rubans à remettre ».`, ok: 'Annuler la remise' })) { delete S.awards?.[id]?.[el.dataset.m]; upd(); } }
+  else if (act === 'mtog') { // clic sur un ruban dans le tableau des agents
+    const md = S.medals.find(x => x.id === el.dataset.m); if (!md) return;
+    if (!md.n) { if (await dlg({ title: 'Retirer la médaille', msg: `Retirer « ${md.name} » à cet agent ?`, ok: 'Retirer', danger: true })) { delete S.awards?.[id]?.[md.id]; upd(); } return; }
+    const cur = S.awards?.[id]?.[md.id];
+    if (cur?.given) delete S.awards[id][md.id]; else Object.assign(aw(id, md.id), { given: Date.now(), by: me?.name || '' });
+    upd();
+  }
   else if (act === 'mgall') { mgAll = !mgAll; render(); }
   else if (act === 'mgiveall') { if (await dlg({ title: 'Rubans remis', msg: 'Marquer tous les rubans en attente comme remis ?', ok: 'Confirmer' })) { actv().forEach(a => S.medals.forEach(md => { const s = medState(a, md); if (md.n && s.earned && !s.given) Object.assign(aw(a.id, md.id), { given: Date.now(), by: me?.name || '' }); })); upd(); } }
   else if (act === 'madd') { const n = $('#mnn').value.trim(); if (!n) return; const auto = $('#mnt').value === '1', dn = Math.round(+$('#mnn2').value); if (auto && !(dn > 0)) { await dlg({ title: 'Durée manquante', msg: 'Indique la durée d’ancienneté (nombre supérieur à 0).', cancel: null, icon: 'warn' }); return; } S.medals.push({ id: uid() + uid(), name: n, ...(auto ? { n: dn, u: $('#mnu').value } : {}), color: RIB_COLORS[S.medals.length % RIB_COLORS.length], img: '' }); upd(); }

@@ -456,3 +456,4 @@ html.light .hbar{background:rgba(150,100,50,.15)}html.light .hbar em{background:
 .mdn{width:80px;text-align:center}.mci .frm select[data-a="mu"]{flex:none;min-width:110px;width:110px}
 .mci .frm .mdn{flex:none;width:76px;min-width:0}.mci .frm select[data-a="mu"]{flex:none;width:130px;min-width:0}.mci .frm select[data-a="mauto"]{flex:1;min-width:130px}
 #dm.modal{z-index:300} /* les messages s’affichent aussi au-dessus de la page de connexion */
+.mtg{display:inline-flex;padding:2px;border:0;border-radius:6px;background:none;cursor:pointer;transition:.15s}.mtg:hover{background:rgba(240,138,60,.18);transform:translateY(-1px)}.mtg:focus-visible{outline:2px solid var(--acc)}
