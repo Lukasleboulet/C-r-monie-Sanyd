@@ -147,9 +147,7 @@ function vImp() {
   return `<section class="panel"><h2>Importer des heures</h2>
   <p class="note">Colle directement ton tableau (colonnes <code>Nom ⇥ Rang ⇥ Part employé ⇥ Heures</code>, l’en-tête et la ligne TOTAL sont ignorés ; la part employé n’est pas utilisée), ou des lignes du type <code>Prénom Nom 43h30min</code>. Les agents sont reconnus par « Prénom Nom ».</p>
   <div class="frm"><select id="iw">${wopts(S.weeks.length - 1)}</select>${can('weekAdd') ? '<button class="btn ghost" data-a="week">+ Nouvelle semaine</button>' : ''}
-  <label class="note"><input type="checkbox" id="ic" style="flex:none;min-width:0"> Créer les agents inconnus (avec leur rang)</label>
-  <label class="note"><input type="checkbox" id="ig" style="flex:none;min-width:0"> Mettre à jour les grades depuis la colonne Rang</label>
-  ${can('gradeEdit') ? '<label class="note"><input type="checkbox" id="icg" style="flex:none;min-width:0"> Créer les grades inconnus</label>' : ''}</div>
+  <span class="note">Les agents sont reconnus par leur nom ; ceux qui n’existent pas sur le site sont seulement listés (les agents se gèrent via le Google Sheet ou l’onglet Effectifs).</span></div>
   <textarea id="it" placeholder="Rayan Sef&#9;Patron&#9;0&#9;3h50min&#10;Paul Pinoto&#9;Patron&#9;0&#9;14h26min"></textarea>
   <div class="frm" style="margin-top:8px"><button class="btn gold" data-a="import">Importer</button></div><div id="ir" class="note"></div></section>`;
 }
@@ -160,24 +158,25 @@ function infoCell(a, d, [k, , t], dis) {
   if (t === 'sel') { const L = [...S.sanctions]; if (v && !L.includes(v)) L.push(v); return `<td><select class="cin" ${at}><option value="">—</option>${L.map(o => `<option ${v === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></td>`; }
   return `<td><input class="cin" type="number" min="0" ${at} value="${esc(v ?? '')}"></td>`;
 }
+const cerN = () => Math.min(4, Math.max(2, S.cerN || 3)); // nombre de semaines de la cérémonie (3 par défaut)
 function vCer() {
   if (cw == null || cw >= S.weeks.length) cw = S.weeks.length - 1;
-  const j = cw, wk = S.weeks[j], w1 = j > 0 ? S.weeks[j - 1] : '—', D = S.ceremonies[wk] || {};
+  const j = cw, wk = S.weeks[j], D = S.ceremonies[wk] || {}, N = cerN(), win = [...Array(N).keys()].map(k => j - N + 1 + k), nOk = win.filter(i => i >= 0).length || 1; // N semaines : S-1 (la plus ancienne) … S-N (semaine choisie)
   const rows = sorted().map(a => {
-    const h1 = j > 0 ? a.w[j - 1] : null, h2 = a.w[j], d = D[a.id] || {}, on = !!d.a, lock = !can('cerEdit') || (d.done && !can('cerEditDone'));
+    const hs = win.map(i => i >= 0 ? a.w[i] : null), d = D[a.id] || {}, on = !!d.a, lock = !can('cerEdit') || (d.done && !can('cerEditDone'));
     const gi0 = S.grades.indexOf(d.done ? d.from : a.grade), gk = S.grades.indexOf(d.g || ''), cls = !on ? '' : gk < 0 || gk === gi0 ? 'dec' : gk < gi0 ? 'up' : 'down';
     return `<tr class="${cls}"><td><div class="nm"><span>${esc(a.prenom)} <b>${esc((a.nom || '').toUpperCase())}</b></span>${badge(d.done ? d.from : a.grade)}</div></td><td class="mono">${esc(a.mat)}</td>
     <td><div class="stk"><select class="cin" data-a="act" data-id="${a.id}" ${lock ? 'disabled' : ''}><option value="">Décision</option>${S.actions.map(x => `<option value="${x.id}" ${d.a === x.id ? 'selected' : ''}>${sym(x)} ${esc(x.label)}</option>`).join('')}</select>
     <select class="cin" data-a="ng" data-id="${a.id}" title="Nouveau grade" ${lock ? 'disabled' : ''}>${gopts(on ? d.g || a.grade : a.grade)}</select></div></td>
-    <td>${F(h1)}</td><td>${F(h2)}</td><td><b>${F(Math.round(((h1 || 0) + (h2 || 0)) / 2))}</b></td>
+    ${hs.map(h => `<td class="hc">${F(h)}</td>`).join('')}<td class="hc"><b>${F(Math.round(hs.reduce((x, y) => x + (y || 0), 0) / nOk))}</b></td>
     ${INFO.map(i => infoCell(a, d, i, !can('cerEdit'))).join('')}
     <td><input class="cin" data-a="why" data-id="${a.id}" value="${esc(d.r || '')}" placeholder="Explication" ${lock ? 'disabled' : ''}></td>
     <td><input class="cin" data-a="inf" data-id="${a.id}" data-k="notes" placeholder="Notes" value="${esc(d.notes || '')}" ${can('cerEdit') ? '' : 'disabled'}></td></tr>`;
   }).join('');
   return `<section class="panel"><h2>Cérémonie</h2><div class="frm"><select id="cw">${wopts(j)}</select>
-  <span class="note">S-1 = semaine du ${w1} · S-2 = semaine du ${wk} · Moyenne = (S-1 + S-2) ÷ 2 · Choisis une décision, ou directement un nouveau grade.</span></div></section>
-  <div class="wrapt cerw"><table class="cer"><thead><tr><th rowspan="2">Prénom NOM</th><th rowspan="2">Matricule</th><th rowspan="2">Promotion</th><th colspan="3" class="h">Nombre d’heures par semaine</th><th colspan="6" class="i">Informations</th><th rowspan="2" class="e">Explication décision</th><th rowspan="2" class="n">Notes CS</th></tr>
-  <tr class="r2"><th class="h">S-1<small>${w1}</small></th><th class="h">S-2<small>${wk}</small></th><th class="h">Moyenne</th>${INFO.map(i => `<th class="i">${i[1]}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+  <label class="note cern">Moyenne sur <select id="cern">${[2, 3, 4].map(n => `<option value="${n}" ${n === N ? 'selected' : ''}>${n} semaines</option>`).join('')}</select></label><span class="note">${win.map((i, k) => `S-${k + 1} = ${i >= 0 ? S.weeks[i] : '—'}`).join(' · ')} · Moyenne = (${win.map((_, k) => 'S-' + (k + 1)).join(' + ')}) ÷ ${nOk}${nOk < N ? ` (seulement ${nOk} semaine(s) enregistrée(s))` : ''} · Choisis une décision, ou directement un nouveau grade.</span></div></section>
+  <div class="wrapt cerw"><table class="cer"><thead><tr><th rowspan="2">Prénom NOM</th><th rowspan="2">Matricule</th><th rowspan="2">Promotion</th><th colspan="${N + 1}" class="h">Nombre d’heures par semaine</th><th colspan="6" class="i">Informations</th><th rowspan="2" class="e">Explication décision</th><th rowspan="2" class="n">Notes CS</th></tr>
+  <tr class="r2">${win.map((i, k) => `<th class="h">S-${k + 1}<small>${i >= 0 ? S.weeks[i] : '—'}</small></th>`).join('')}<th class="h">Moyenne</th>${INFO.map(i => `<th class="i">${i[1]}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
   <section class="panel" style="margin-top:14px"><h2>Récapitulatif</h2><pre id="rc">${esc(recap())}</pre>
   <div class="frm noprint"><button class="btn gold" data-a="copy">Copier</button>
   ${can('cerValidate') ? '<button class="btn" data-a="apply">Valider : appliquer les changements de grade</button>' : ''}</div></section>`;
@@ -288,10 +287,10 @@ function parseLine(line) {
   return { name, grade: '', mins };
 }
 function doImport() {
-  const wi = +$('#iw').value, upG = $('#ig')?.checked; let ok = 0, cr = 0, gch = 0; const unk = [], badG = new Set();
+  const wi = +$('#iw').value, upG = false; let ok = 0, cr = 0, gch = 0; const unk = [], badG = new Set();
   const findG = g => g ? S.grades.find(x => norm(x) === norm(g)) : null;
   const newG = [], archHit = [], ignored = [], low = [...S.grades].reverse().find(g => !ignR(g)) || S.grades.at(-1); // grade par défaut des agents créés sans rang connu
-  if ($('#icg')?.checked && can('gradeEdit')) { // créer les rangs inconnus, placés selon l'ordre du tableau collé (trié du plus haut au plus bas)
+  if (false) { // créer les rangs inconnus, placés selon l'ordre du tableau collé (trié du plus haut au plus bas)
     const seq = []; for (const line of $('#it').value.split('\n')) { const L = line.trim() && parseLine(line); if (L && L.grade && !seq.some(x => norm(x) === norm(L.grade))) seq.push(L.grade); }
     seq.forEach((g, i) => {
       if (findG(g) || ignR(g)) return;
@@ -312,15 +311,15 @@ function doImport() {
       if (upG && g && g !== b.grade) { logGrade(b, b.grade, g, 'import'); b.grade = g; gch++; }
       continue;
     }
-    if ($('#ic').checked && L.name) {
+    if (false) {
       const [pre, ...rest] = L.name.split(' '), w = S.weeks.map(() => null); w[wi] = L.mins;
       const na = { id: uid(), mat: '-', prenom: pre, nom: rest.join(' '), grade: g || low, w }; S.agents.push(na); logGrade(na, null, na.grade, 'création'); cr++;
     } else unk.push(L.name || line.trim());
   }
   save();
   $('#ir').innerHTML = `<b>${ok}</b> mis à jour (semaine du ${S.weeks[wi]})${cr ? `, <b>${cr}</b> créé(s)` : ''}${gch ? `, <b>${gch}</b> grade(s) modifié(s)` : ''}.` + (ignored.length ? `<br>Ignorés (rang ${(S.ignRanks || []).map(esc).join(' / ')}) : ${ignored.map(esc).join(', ')}` : '') + (archHit.length ? `<br>Agent(s) archivé(s) présents dans la liste (heures enregistrées, toujours archivés) : ${archHit.map(esc).join(', ')}` : '') + (newG.length ? `<br>Grade(s) créé(s) : <b>${newG.map(esc).join(', ')}</b> — vérifie leur place dans Administration › Personnalisation.` : '') +
-    (unk.length ? `<br>Non reconnus (coche « Créer les agents inconnus » pour les ajouter) : ${unk.map(esc).join(', ')}` : '') +
-    (badG.size ? `<br>Rangs absents de la liste des grades (ignorés${$('#ic').checked ? ` ; agents créés en ${esc(low)}` : ''}) : ${[...badG].map(esc).join(', ')} — ajoute-les dans Administration › Personnalisation si besoin.` : '');
+    (unk.length ? `<br>Non reconnus (absents du site, heures non importées) : ${unk.map(esc).join(', ')}` : '') +
+    (badG.size ? `<br>Rangs absents de la liste des grades (ignorés) : ${[...badG].map(esc).join(', ')} — ajoute-les dans Administration › Personnalisation si besoin.` : '');
 }
 function unlock(a) { // admin : annule l'application d'une décision déjà validée
   const d = (S.ceremonies[S.weeks[cw]] || {})[a.id];
@@ -441,6 +440,7 @@ document.addEventListener('change', e => {
   if (act === 'sname' && !can('sanctionEdit')) return;
   if (['udid', 'urole'].includes(act) && !mgr()) return;
   if (el.id === 'cw') { cw = +el.value; render(); }
+  else if (el.id === 'cern') { if (!can('cerEdit')) { render(); return; } S.cerN = +el.value; upd(); }
   else if (el.id === 'fg') { flt.g = el.value; $('#list').innerHTML = listHtml(); }
   else if (el.id === 'hw') { hw = +el.value; render(); }
   else if (el.id === 'hg') { hg = el.value; render(); }
