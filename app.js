@@ -1,5 +1,7 @@
 // ====== SAMP · District de Sandy Shore : suivi des heures & cérémonies (site + serveur Node.js : comptes, rôles et données partagés) ======
 const DEFAULT_GRADES = ['Capitaine','Lieutenant-Chef','Lieutenant','Sergent-2','Sergent-1','SLO','Officier-3','Officier-2','Officier','Rookie']; // du plus haut au plus bas
+const RIB_COLORS = ['#4f8ad8', '#3dbb7a', '#e0b23a', '#e0733a', '#c9473f', '#8e5bd6'];
+const defaultMedals = () => [2, 4, 6, 8, 10, 12].map((m, i) => ({ id: 'rub' + m, name: `Ruban de service — ${m} mois`, months: m, color: RIB_COLORS[i], img: '' }));
 const DEFAULT_ACTIONS = [{ id: 'promo', label: 'Montée', mv: -1 }, { id: 'retro', label: 'Rétrogradation', mv: 1 }]; // mv : décalage dans la hiérarchie (-1 monte, 1 descend, 0 = aucun)
 const DEFAULT_SANCTIONS = ['Avertissement', 'Blâme', 'Mise à pied']; // modifiables par l'admin (Paramètres)
 const KEY = 'samp-sandy-shore-v1'; // clé propre à ce site (ne pas partager avec le site Vespucci)
@@ -41,6 +43,7 @@ function migrate(d) { // le grade « Rookie-PPA » n'existe pas : fusionné dans
   d.actions ||= DEFAULT_ACTIONS.map(x => ({ ...x }));
   d.gcol ||= {};
   d.glog ||= [];
+  d.medals ||= defaultMedals(); d.awards ||= {}; d.sheet ||= { url: '', gid: '', district: 'Sandy Shore', gmap: {}, last: 0 };
   d.ignRanks ||= ['Patron', 'Sheriff']; // rangs ignorés à l'import et masqués (sauf agents ajoutés à la main)
   d.sanctions ||= [...DEFAULT_SANCTIONS];
   Object.values(d.ceremonies || {}).forEach(c => Object.values(c).forEach(x => ['fps', 'f1020', 'fus', 'abs'].forEach(k => { if (k in x && typeof x[k] !== 'boolean') x[k] = !!x[k] && x[k] !== 'Non'; })));
@@ -166,10 +169,10 @@ function vSet() {
     `<div class="frm"><input id="sn" placeholder="Nouvelle sanction (ex : Mise à pied 48h)"><button class="btn gold" data-a="sadd">Ajouter</button></div>`) + `</section>` + (admin ? rolesPanel() : '') + (mgr() ? usersPanel() : '');
 }
 
-const views = { eff: vEff, hrs: vHrs, imp: vImp, cer: vCer, set: vSet, sta: vSta };
-const TITLES = { eff: 'Effectifs', hrs: 'Heures de service', imp: 'Importer des heures', cer: 'Cérémonie', set: 'Paramètres', sta: 'Statistiques agent' };
-const TSUB = { eff: 'Liste des agents du district, grades et matricules', hrs: 'Saisie et suivi des heures de service semaine par semaine', imp: 'Import en masse des heures depuis ta feuille', cer: 'Décisions, sanctions et notes de la cérémonie', set: 'Grades, options de décision, sanctions, rôles et comptes', sta: 'Heures, grades, sanctions et historique de chaque agent depuis le début' };
-const TICON = { eff: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.8 0 4.5 1.9 4.5 4.5"/>', hrs: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', imp: '<path d="M12 3v12m0 0-4-4m4 4 4-4M4 20h16"/>', cer: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', set: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>', sta: '<path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/>' };
+const views = { eff: vEff, hrs: vHrs, imp: vImp, cer: vCer, set: vSet, sta: vSta, med: vMed };
+const TITLES = { eff: 'Effectifs', hrs: 'Heures de service', imp: 'Importer des heures', cer: 'Cérémonie', set: 'Paramètres', sta: 'Statistiques agent', med: 'Médailles & rubans' };
+const TSUB = { eff: 'Liste des agents du district, grades et matricules', hrs: 'Saisie et suivi des heures de service semaine par semaine', imp: 'Import en masse des heures depuis ta feuille', cer: 'Décisions, sanctions et notes de la cérémonie', set: 'Grades, options de décision, sanctions, rôles et comptes', sta: 'Heures, grades, sanctions et historique de chaque agent depuis le début', med: 'Rubans de service, médailles et synchronisation avec le Google Sheet' };
+const TICON = { eff: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.8 0 4.5 1.9 4.5 4.5"/>', hrs: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', imp: '<path d="M12 3v12m0 0-4-4m4 4 4-4M4 20h16"/>', cer: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', set: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>', sta: '<path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/>', med: '<path d="M8 2h8l-2.5 7h-3z"/><circle cx="12" cy="15" r="6"/><path d="m12 12 .9 1.9 2.1.3-1.5 1.4.4 2.1-1.9-1-1.9 1 .4-2.1-1.5-1.4 2.1-.3z"/>' };
 function render() {
   if (!canTab(tab)) tab = TABS.find(canTab) || null; // onglet non autorisé -> 1er onglet accessible
   document.querySelectorAll('#nav button[data-t]').forEach(b => { b.hidden = !canTab(b.dataset.t); b.classList.toggle('on', b.dataset.t === tab); });
@@ -473,12 +476,13 @@ $('#rs').onchange = async e => {
 };
 $('#rz').onclick = async () => { if (can('dataReset') && await dlg({ title: 'Réinitialiser', msg: 'Tout réinitialiser avec les données de départ ? Les modifications actuelles seront perdues.', ok: 'Réinitialiser', danger: true })) { S = migrate(seed()); upd(); } };
 // ---------- connexion & synchronisation avec le serveur (server.js) ----------
-const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'set'];
+const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set'];
 const PERM_GROUPS = [
   ['Agents', [['agentAdd', 'Créer'], ['agentEdit', 'Modifier'], ['agentDel', 'Archiver / suppr.']]],
   ['Heures', [['hoursEdit', 'Saisir'], ['hoursImport', 'Importer'], ['weekAdd', 'Ajouter semaine']]],
   ['Cérémonie', [['cerEdit', 'Préparer'], ['cerValidate', 'Valider'], ['cerEditDone', 'Modifier validée']]],
   ['Paramètres', [['gradeEdit', 'Grades'], ['actionEdit', 'Options décision'], ['sanctionEdit', 'Sanctions'], ['usersManage', 'Gérer comptes']]],
+  ['Médailles', [['medalEdit', 'Gérer / remettre'], ['sheetSync', 'Synchro Google Sheet']]],
   ['Données', [['dataBackup', 'Sauvegarde'], ['dataReset', 'Restaurer / réinit.']]]];
 const PERMS = PERM_GROUPS.flatMap(g => g[1]);
 let roles = [], users = [], firstRun = false, discordOn = false, redirUrl = '', dcMsg = '';
@@ -605,7 +609,7 @@ async function adminCall(method, url, body) { // action d'administration : le se
 }
 const dpseudo = u => u.dname ? (u.dun && u.dun !== u.dname ? `${u.dname} (@${u.dun})` : u.dname) : '';
 function rolesPanel() {
-  const T = [['eff', 'Effectifs'], ['hrs', 'Heures'], ['imp', 'Importer'], ['cer', 'Cérémonie'], ['sta', 'Statistiques'], ['set', 'Paramètres']];
+  const T = [['eff', 'Effectifs'], ['hrs', 'Heures'], ['imp', 'Importer'], ['cer', 'Cérémonie'], ['sta', 'Statistiques'], ['med', 'Médailles'], ['set', 'Paramètres']];
   const box = (attrs, on, dis) => `<td class="ck"><label class="chk"><input type="checkbox" ${attrs} ${on ? 'checked' : ''} ${dis ? 'disabled' : ''}><span></span></label></td>`;
   const nUsers = r => users.filter(u => u.role === r.id).length;
   return `<section class="panel"><h2>Rôles et accès</h2><p class="note">Pour chaque rôle : les onglets visibles, puis les actions autorisées. « Gérer comptes » permet de valider les comptes en attente et de gérer les comptes non administrateurs (sans toucher aux rôles). Le panneau « Rôles et accès » reste réservé aux administrateurs.</p>
@@ -634,6 +638,187 @@ function usersPanel() {
     [...users].sort((a, b) => (b.role === 'pending') - (a.role === 'pending')).map(row).join('') +
     `<div class="frm"><input id="nu" placeholder="Identifiant" autocomplete="off"><input id="nd" placeholder="ID Discord (optionnel)" autocomplete="off"><input id="np" type="password" placeholder="Mot de passe (facultatif avec Discord)" autocomplete="new-password"><select id="nr">${ro('user')}</select><button class="btn gold" data-a="uadd">Créer le compte</button></div></section>`;
 }
+
+// ---------- médailles, rubans de service & synchronisation Google Sheet ----------
+const pad2 = n => String(n).padStart(2, '0');
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+function frDate(s) { // "21/05/2023", "1/5/23", "2023-05-21" -> "2023-05-21"
+  s = String(s || '').trim(); let m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/);
+  if (m) { const y = m[3].length === 2 ? 2000 + +m[3] : +m[3], mo = +m[2], d = +m[1]; return mo >= 1 && mo <= 12 && d >= 1 && d <= 31 ? `${y}-${pad2(mo)}-${pad2(d)}` : null; }
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+}
+const fmtD = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '—';
+function addMonths(iso, n) { const [y, m, d] = iso.split('-').map(Number), t = new Date(y, m - 1 + n, 1), last = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate(); return `${t.getFullYear()}-${pad2(t.getMonth() + 1)}-${pad2(Math.min(d, last))}`; }
+function monthsSince(iso) { if (!iso) return null; const [y, m, d] = iso.split('-').map(Number), n = new Date(); let k = (n.getFullYear() - y) * 12 + n.getMonth() - (m - 1); if (n.getDate() < d) k--; return Math.max(0, k); }
+const daysUntil = iso => Math.ceil((new Date(iso + 'T00:00:00') - new Date(todayIso() + 'T00:00:00')) / 864e5);
+const anc = iso => { const k = monthsSince(iso); return k == null ? '—' : k < 12 ? `${k} mois` : `${Math.floor(k / 12)} an${k >= 24 ? 's' : ''}${k % 12 ? ` ${k % 12} mois` : ''}`; };
+function medState(a, md) { // { earned: date d'obtention ou null, due: date prévue (rubans), given: remis le (timestamp) }
+  const aw = S.awards?.[a.id]?.[md.id];
+  if (md.months) { const due = a.arr ? addMonths(a.arr, md.months) : null; return { earned: due && due <= todayIso() ? due : null, due, given: aw?.given || null }; }
+  return { earned: aw?.at || null, due: null, given: aw ? aw.given || aw.t || 1 : null };
+}
+const medIcon = (md, cls = '') => md.img ? `<img class="mic ${cls}" src="${md.img}" alt="${esc(md.name)}" title="${esc(md.name)}">`
+  : `<span class="mic rib ${cls}" style="--c:${esc(md.color || '#b8a47c')}" title="${esc(md.name)}">${md.months ? `<i>${md.months}</i>` : ''}</span>`;
+function agentMedals(a) { return S.medals.map(md => ({ md, s: medState(a, md) })).filter(o => o.s.earned); }
+const medRow = a => agentMedals(a).map(({ md, s }) => s.given ? medIcon(md) : `<span class="mpend" title="${esc(md.name)} — obtenu le ${fmtD(s.earned)}, pas encore remis">${medIcon(md)}</span>`).join('') || '<span class="note">—</span>';
+
+// --- Google Sheet : lecture CSV, analyse, aperçu des changements ---
+function csvParse(t) {
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '"') { if (t[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true; else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; }
+    else f += c;
+  }
+  if (f || row.length) { row.push(f); rows.push(row); }
+  return rows;
+}
+const gkey = s => norm(s).replace(/\biii\b/g, '3').replace(/\bii\b/g, '2').replace(/\biv\b/g, '4').replace(/\bchief\b/g, 'chef').replace(/\b(du|de|des|la|le)\b/g, '').replace(/[^a-z0-9]/g, '');
+const mapG = name => { const m = S.sheet.gmap || {}; if (name in m) return m[name] || null; return S.grades.find(g => gkey(g) === gkey(name)) || null; };
+function sheetRecords(rows) {
+  const h = rows.findIndex(r => r.some(c => norm(c) === 'matricule') && r.some(c => /^pr[eé]nom$/i.test(c.trim())));
+  if (h < 0) throw new Error('Ligne d’en-tête introuvable (colonnes « Matricule » et « Prénom » attendues).');
+  const H = rows[h].map(c => norm(c)), col = (...k) => H.findIndex(x => k.includes(x));
+  const C = { mat: col('matricule'), grade: col('grade'), pre: col('prenom'), nom: col('nom'), did: col('id discord', 'discord', 'id discord '), dis: col('district') };
+  if (C.pre < 0 || C.nom < 0) throw new Error('Colonnes « Prénom » et « Nom » introuvables.');
+  const known = new Set(Object.values(C)), dcols = rows[h].map((c, j) => ({ j, name: c.trim() })).filter(o => o.name && !known.has(o.j) && (mapG(o.name) || S.grades.some(g => gkey(g) === gkey(o.name)) || /^(rookie|officier|slo|sergent|lieutenant|capitaine)/i.test(o.name)));
+  const recs = [];
+  for (const r of rows.slice(h + 1)) {
+    const pre = (r[C.pre] || '').trim(), nom = (r[C.nom] || '').trim(); if (!pre && !nom) continue;
+    const dates = {}; dcols.forEach(o => { const d = frDate(r[o.j]); if (d) dates[o.name] = d; });
+    recs.push({ mat: (r[C.mat] || '').trim(), grade: (r[C.grade] || '').trim(), pre, nom, did: (r[C.did] || '').trim(), dis: C.dis >= 0 ? (r[C.dis] || '').trim() : '', dates });
+  }
+  return { recs, hasDistrict: C.dis >= 0, dcols: dcols.map(o => o.name) };
+}
+let syncP = null; // aperçu en cours { items, unknown, stats }
+function buildPreview(parsed) {
+  const want = norm(S.sheet.district || ''), recs = parsed.recs.filter(r => !want || !parsed.hasDistrict || norm(r.dis) === want);
+  const ign = recs.filter(r => ignR(r.grade) || ignR(mapG(r.grade))), keep = recs.filter(r => !ign.includes(r));
+  if (!keep.length) throw new Error(`Aucun agent avec le district « ${S.sheet.district} » dans le Sheet.`);
+  const items = [], used = new Set(), unknown = new Set(), low = [...S.grades].reverse().find(g => !ignR(g)) || S.grades.at(-1);
+  for (const r of keep) {
+    const nm = norm(r.pre + ' ' + r.nom);
+    const a = S.agents.find(x => !used.has(x.id) && norm(full(x)) === nm) || S.agents.find(x => !used.has(x.id) && r.mat && x.mat && x.mat !== '-' && x.mat === r.mat) || S.agents.find(x => !used.has(x.id) && r.did && x.did === r.did);
+    const g = r.grade ? mapG(r.grade) : null; if (r.grade && !g && !(r.grade in (S.sheet.gmap || {}))) unknown.add(r.grade);
+    const arr = Object.values(r.dates).sort()[0] || null;
+    if (!a) { items.push({ k: 'create', r, g: g || low, arr, on: true }); continue; }
+    used.add(a.id);
+    if (a.arch) items.push({ k: 'unarch', a, r, on: true });
+    if (g && g !== a.grade && !hiddenA(a)) items.push({ k: 'grade', a, r, from: a.grade, to: g, on: true });
+    if (r.mat && r.mat !== a.mat) items.push({ k: 'mat', a, r, from: a.mat, to: r.mat, on: true });
+    if (arr && arr !== a.arr) items.push({ k: 'arr', a, r, from: a.arr, to: arr, on: true });
+    items.push({ k: 'quiet', a, r, on: true }); // ID Discord + dates de grade (sans affichage)
+  }
+  actv().filter(a => !used.has(a.id) && !ignR(a.grade)).forEach(a => items.push({ k: 'arch', a, on: true })); // Patron, Sheriff… : jamais archivés automatiquement
+  syncP = { items, unknown: [...unknown], nIgn: ign.length, nRec: keep.length, dcols: parsed.dcols };
+}
+async function doSync() {
+  if (!S.sheet.url) { await dlg({ title: 'Lien manquant', msg: 'Colle d’abord le lien de ton Google Sheet.', cancel: null, icon: 'warn' }); return; }
+  $('#msync').disabled = true; $('#msync').textContent = 'Lecture du Sheet…';
+  try {
+    const r = await api('GET', '/api/sheet?url=' + encodeURIComponent(S.sheet.url) + (S.sheet.gid ? '&gid=' + encodeURIComponent(S.sheet.gid) : ''));
+    if (!r.ok) throw new Error(r.json?.error || 'Erreur serveur');
+    const raw = sheetRecords(csvParse(r.json.csv)); buildPreview(raw); syncP.raw = raw;
+  } catch (e) { syncP = null; await dlg({ title: 'Synchronisation impossible', msg: e.message, cancel: null, icon: 'warn' }); }
+  render();
+}
+function applySync() {
+  const low = [...S.grades].reverse().find(g => !ignR(g)) || S.grades.at(-1); let n = 0;
+  for (const it of syncP.items) {
+    if (!it.on) continue; const r = it.r;
+    const gd = r ? Object.fromEntries(Object.entries(r.dates).map(([k, v]) => [mapG(k) || k, v])) : null;
+    if (it.k === 'create') { const na = { id: uid(), mat: r.mat || '-', prenom: r.pre, nom: r.nom, grade: it.g, w: S.weeks.map(() => null), arr: it.arr, gdates: gd, did: r.did || undefined }; S.agents.push(na); logGrade(na, null, na.grade, 'création (Google Sheet)'); n++; }
+    else if (it.k === 'unarch') { delete it.a.arch; n++; }
+    else if (it.k === 'grade') { logGrade(it.a, it.a.grade, it.to, 'Google Sheet'); it.a.grade = it.to; n++; }
+    else if (it.k === 'mat') { it.a.mat = it.to; n++; }
+    else if (it.k === 'arr') { it.a.arr = it.to; n++; }
+    else if (it.k === 'arch') { it.a.arch = { t: Date.now(), w: lastW(), why: 'Absent du Google Sheet (district ' + S.sheet.district + ')' }; n++; }
+    else if (it.k === 'quiet') { if (r.did) it.a.did = r.did; if (gd && Object.keys(gd).length) it.a.gdates = gd; }
+  }
+  S.sheet.last = Date.now(); syncP = null; upd();
+  return n;
+}
+const SYNC_L = { create: ['Nouveaux agents', 'up'], unarch: ['Réintégrés (de retour dans le Sheet)', 'up'], grade: ['Changements de grade', ''], mat: ['Matricules', ''], arr: ['Dates d’arrivée', ''], arch: ['À archiver (absents du Sheet ou plus dans le district)', 'down'] };
+function previewHtml() {
+  const P = syncP, groups = Object.keys(SYNC_L).map(k => [k, P.items.map((it, i) => ({ it, i })).filter(o => o.it.k === k)]).filter(([, L]) => L.length);
+  const line = ({ it, i }) => {
+    const who = it.a ? esc(full(it.a)) : `${esc(it.r.pre)} ${esc(it.r.nom)}`, d = it.k === 'create' ? `${badge(it.g)} · ${esc(it.r.mat || '-')}${it.arr ? ' · arrivé le ' + fmtD(it.arr) : ''}`
+      : it.k === 'grade' ? `${badge(it.from)} → ${badge(it.to)}` : it.k === 'mat' ? `${esc(it.from)} → <b>${esc(it.to)}</b>` : it.k === 'arr' ? `${fmtD(it.from)} → <b>${fmtD(it.to)}</b>` : it.k === 'arch' ? badge(it.a.grade) : '';
+    return `<label class="spi"><input type="checkbox" data-a="mchk" data-i="${i}" ${it.on ? 'checked' : ''}><span class="spn">${who}</span><span class="spd">${d}</span></label>`;
+  };
+  return `<div class="sprev"><div class="ph"><h2>Aperçu de la synchronisation</h2><span class="note">${P.nRec} agent(s) du district dans le Sheet${P.nIgn ? ` · ${P.nIgn} ignoré(s) (rang masqué)` : ''}${P.dcols.length ? ` · dates lues : ${P.dcols.map(esc).join(', ')}` : ''}</span></div>` +
+    (P.unknown.length ? `<div class="spg warn"><h3 class="sub">Grades du Sheet inconnus du site</h3>${P.unknown.map(g => `<div class="frm"><span class="tag">${esc(g)}</span><span class="note">→</span><select data-a="mgmap" data-g="${esc(g)}"><option value="">Choisir le grade du site…</option>${S.grades.map(x => `<option>${esc(x)}</option>`).join('')}<option value="__new">➕ Créer « ${esc(g)} »</option><option value="__ign">Ignorer ce grade</option></select></div>`).join('')}</div>` : '') +
+    (groups.length ? groups.map(([k, L]) => `<div class="spg ${SYNC_L[k][1]}"><h3 class="sub">${SYNC_L[k][0]} <span class="note">(${L.length})</span></h3>${L.map(line).join('')}</div>`).join('') : '<p class="note">Tout est déjà à jour.</p>') +
+    `<div class="frm"><button class="btn gold" data-a="mapply">Appliquer les changements cochés</button><button class="btn ghost" data-a="mcancel">Annuler</button></div></div>`;
+}
+let mq = '';
+function vMed() {
+  const ed = can('medalEdit'), list = byGrade(actv()).filter(a => !mq || norm(full(a) + ' ' + a.mat + ' ' + a.grade).includes(norm(mq)));
+  const due = []; actv().forEach(a => S.medals.forEach(md => { const s = medState(a, md); if (md.months && s.earned && !s.given) due.push({ a, md, s }); }));
+  due.sort((p, q) => p.s.earned.localeCompare(q.s.earned));
+  const manual = S.medals.filter(m => !m.months);
+  const syncPanel = can('sheetSync') ? `<section class="panel"><div class="ph"><h2>Synchronisation Google Sheet</h2><span class="note">${S.sheet.last ? 'Dernière synchro : ' + new Date(S.sheet.last).toLocaleString('fr-FR') : 'Jamais synchronisé'}</span></div>
+    <p class="note">Met à jour les agents (création, grade, matricule, date d’arrivée) et archive ceux qui ne sont plus dans le district. Un aperçu s’affiche avant d’appliquer. Le Sheet doit être partagé « Tous les utilisateurs disposant du lien ».</p>
+    <div class="frm"><input id="murl" data-a="murl" style="flex:1" placeholder="Lien du Google Sheet (https://docs.google.com/spreadsheets/d/…)" value="${esc(S.sheet.url || '')}"><input data-a="mgid" style="width:150px" placeholder="gid de l’onglet (option.)" value="${esc(S.sheet.gid || '')}" title="Numéro après « gid= » dans l’adresse quand l’onglet est ouvert"><input data-a="mdist" style="width:170px" placeholder="District" value="${esc(S.sheet.district || '')}" title="Seuls les agents de ce district sont pris en compte"><button class="btn gold" id="msync" data-a="msync">Synchroniser</button></div>
+    ${syncP?.items ? previewHtml() : ''}</section>` : '';
+  const dueP = `<section class="panel"><div class="ph"><h2>Rubans à remettre <span class="note">(${due.length})</span></h2>${ed && due.length ? '<button class="btn ghost" data-a="mgiveall">Tout marquer comme remis</button>' : ''}</div>` + (due.length ? `<div class="wrapt"><table><thead><tr><th>Agent</th><th>Ruban</th><th>Obtenu le</th><th></th></tr></thead><tbody>` +
+    due.map(({ a, md, s }) => `<tr><td>${esc(full(a))} ${badge(a.grade)}</td><td><span class="mrow">${medIcon(md)} ${esc(md.name)}</span></td><td class="mono">${fmtD(s.earned)}</td><td class="acts">${ed ? `<button class="btn ghost" data-a="mgive" data-id="${a.id}" data-m="${md.id}">Remis ✓</button>` : ''}</td></tr>`).join('') + `</tbody></table></div>` : '<p class="note">Aucun ruban en attente de remise.</p>') + `</section>`;
+  const cat = `<section class="panel"><div class="ph"><h2>Médailles & rubans</h2><span class="note">Rubans : attribués automatiquement selon l’ancienneté (date d’arrivée). Médailles : attribuées à la main.</span></div><div class="mcat">` +
+    S.medals.map(md => { const n = actv().filter(a => medState(a, md).earned).length; return `<div class="mcard2">${medIcon(md, 'big')}<div class="mci">${ed ? `<input data-a="mname" data-id="${md.id}" value="${esc(md.name)}">` : `<b>${esc(md.name)}</b>`}
+      <div class="frm">${ed ? `<select data-a="mtype" data-id="${md.id}"><option value="0" ${md.months ? '' : 'selected'}>Attribution manuelle</option>${[1, 2, 3, 4, 6, 8, 9, 10, 12, 18, 24, 36].map(m => `<option value="${m}" ${md.months === m ? 'selected' : ''}>Ancienneté ${m} mois</option>`).join('')}</select>` : `<span class="note">${md.months ? `Ancienneté ${md.months} mois` : 'Attribution manuelle'}</span>`}<span class="note">${n} agent(s)</span></div>
+      ${ed ? `<div class="frm">${md.img ? '' : `<input type="color" class="col" data-a="mcolor" data-id="${md.id}" value="${md.color || '#b8a47c'}" title="Couleur (sans image)">`}<label class="btn ghost">${md.img ? 'Changer l’image' : 'Image…'}<input type="file" accept="image/*" data-a="mimg" data-id="${md.id}" hidden></label>${md.img ? `<button class="btn ghost" data-a="mimgdel" data-id="${md.id}">Retirer l’image</button>` : ''}<button class="btn del" data-a="mdel" data-id="${md.id}">Supprimer</button></div>` : ''}</div></div>`; }).join('') + `</div>` +
+    (ed ? `<div class="frm" style="margin-top:12px"><input id="mnn" placeholder="Nouvelle médaille (ex : Médaille du mérite)"><select id="mnt"><option value="0">Attribution manuelle</option>${[1, 2, 3, 4, 6, 8, 9, 10, 12, 18, 24, 36].map(m => `<option value="${m}">Ancienneté ${m} mois</option>`).join('')}</select><button class="btn gold" data-a="madd">Ajouter</button></div>` : '') + `</section>`;
+  const tbl = `<section class="panel"><div class="ph"><h2>Agents</h2><input id="mq" placeholder="Rechercher…" value="${esc(mq)}" style="width:260px"></div><div class="wrapt"><table><thead><tr><th>Agent</th><th>Arrivée</th><th>Ancienneté</th><th>Médailles & rubans</th><th>Prochain ruban</th>${ed && manual.length ? '<th>Attribuer</th>' : ''}</tr></thead><tbody id="mtb">` +
+    list.map(a => { const nx = S.medals.filter(m => m.months).map(md => ({ md, s: medState(a, md) })).filter(o => o.s.due && !o.s.earned).sort((p, q) => p.s.due.localeCompare(q.s.due))[0];
+      return `<tr><td>${esc(full(a))} ${badge(a.grade)}</td><td>${ed ? `<input type="date" class="cin" data-a="marr" data-id="${a.id}" value="${a.arr || ''}">` : fmtD(a.arr)}</td><td class="mono">${anc(a.arr)}</td><td><span class="mrow">${medRow(a)}${ed ? agentMedals(a).filter(o => !o.md.months).map(o => `<button class="mx" data-a="munaward" data-id="${a.id}" data-m="${o.md.id}" title="Retirer « ${esc(o.md.name)} »">✕</button>`).join('') : ''}</span></td>
+        <td>${nx ? `<span class="mrow">${medIcon(nx.md, 'sm')} <span class="note">dans ${daysUntil(nx.s.due)} j (${fmtD(nx.s.due)})</span></span>` : a.arr ? '<span class="note">tous obtenus</span>' : '<span class="note">date d’arrivée inconnue</span>'}</td>
+        ${ed && manual.length ? `<td><select class="cin" data-a="maward" data-id="${a.id}"><option value="">+ Médaille…</option>${manual.filter(m => !medState(a, m).earned).map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></td>` : ''}</tr>`; }).join('') + `</tbody></table></div>${list.length ? '' : '<p class="note">Aucun agent.</p>'}</section>`;
+  return syncPanel + dueP + cat + tbl;
+}
+function medImg(file) { // image redimensionnée (96 px max) pour rester légère dans la base
+  return new Promise((ok, no) => { const fr = new FileReader(); fr.onerror = no; fr.onload = () => { const im = new Image(); im.onerror = no; im.onload = () => {
+    const k = Math.min(1, 96 / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+    c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); const w = c.toDataURL('image/webp', .9); ok(w.startsWith('data:image/webp') ? w : c.toDataURL('image/png')); }; im.src = fr.result; }; fr.readAsDataURL(file); });
+}
+document.addEventListener('click', async e => {
+  const el = e.target.closest('[data-a]'); if (!el) return; const act = el.dataset.a, id = el.dataset.id;
+  if (['msync', 'mapply', 'mcancel'].includes(act) && !can('sheetSync')) return;
+  if (['mgive', 'mgiveall', 'madd', 'mdel', 'mimgdel', 'munaward'].includes(act) && !can('medalEdit')) return;
+  const aw = (aid, mid) => (((S.awards ||= {})[aid] ||= {})[mid] ||= {});
+  if (act === 'msync') doSync();
+  else if (act === 'mcancel') { syncP = null; render(); }
+  else if (act === 'mapply') { const n = syncP.items.filter(i => i.on && i.k !== 'quiet').length; if (await dlg({ title: 'Appliquer la synchronisation', msg: `Appliquer ${n} changement(s) ?`, ok: 'Appliquer', icon: 'warn' })) { applySync(); await dlg({ title: 'Synchronisation terminée', msg: `${n} changement(s) appliqué(s).`, cancel: null, icon: 'info' }); } }
+  else if (act === 'mgive') { aw(id, el.dataset.m).given = Date.now(); upd(); }
+  else if (act === 'mgiveall') { if (await dlg({ title: 'Rubans remis', msg: 'Marquer tous les rubans en attente comme remis ?', ok: 'Confirmer' })) { actv().forEach(a => S.medals.forEach(md => { const s = medState(a, md); if (md.months && s.earned && !s.given) aw(a.id, md.id).given = Date.now(); })); upd(); } }
+  else if (act === 'madd') { const n = $('#mnn').value.trim(); if (!n) return; const m = +$('#mnt').value; S.medals.push({ id: uid() + uid(), name: n, months: m || null, color: RIB_COLORS[S.medals.length % RIB_COLORS.length], img: '' }); upd(); }
+  else if (act === 'mdel') { const md = S.medals.find(x => x.id === id); if (md && await dlg({ title: 'Supprimer', msg: `Supprimer « ${md.name} » ? Les attributions de cette médaille seront perdues.`, ok: 'Supprimer', danger: true })) { S.medals = S.medals.filter(x => x !== md); Object.values(S.awards || {}).forEach(o => delete o[id]); upd(); } }
+  else if (act === 'mimgdel') { S.medals.find(x => x.id === id).img = ''; upd(); }
+  else if (act === 'munaward') { const md = S.medals.find(x => x.id === el.dataset.m); if (await dlg({ title: 'Retirer la médaille', msg: `Retirer « ${md?.name} » à cet agent ?`, ok: 'Retirer', danger: true })) { delete S.awards?.[id]?.[el.dataset.m]; upd(); } }
+});
+document.addEventListener('change', async e => {
+  const el = e.target, act = el.dataset.a, id = el.dataset.id; if (!act || !/^m/.test(act)) return;
+  if (['murl', 'mgid', 'mdist', 'mgmap', 'mchk'].includes(act) && !can('sheetSync')) return;
+  if (['mname', 'mtype', 'mcolor', 'mimg', 'marr', 'maward'].includes(act) && !can('medalEdit')) return;
+  if (act === 'murl') { S.sheet.url = el.value.trim(); save(); }
+  else if (act === 'mgid') { S.sheet.gid = el.value.trim().replace(/\D/g, ''); save(); }
+  else if (act === 'mdist') { S.sheet.district = el.value.trim(); save(); }
+  else if (act === 'mchk') { syncP.items[+el.dataset.i].on = el.checked; }
+  else if (act === 'mgmap') {
+    const g = el.dataset.g, v = el.value; if (!v) return;
+    if (v === '__new') { if (!S.grades.includes(g)) S.grades.push(g); (S.sheet.gmap ||= {})[g] = g; }
+    else (S.sheet.gmap ||= {})[g] = v === '__ign' ? '' : v;
+    save(); try { buildPreview(syncP.raw); } catch (x) {} render();
+  }
+  else if (act === 'mname') { const md = S.medals.find(x => x.id === id); if (el.value.trim()) md.name = el.value.trim(); upd(); }
+  else if (act === 'mtype') { S.medals.find(x => x.id === id).months = +el.value || null; upd(); }
+  else if (act === 'mcolor') { S.medals.find(x => x.id === id).color = el.value; upd(); }
+  else if (act === 'mimg') { const f = el.files[0]; if (!f) return; try { S.medals.find(x => x.id === id).img = await medImg(f); upd(); } catch (x) { await dlg({ title: 'Image illisible', msg: 'Ce fichier n’est pas une image valide.', cancel: null, icon: 'warn' }); } }
+  else if (act === 'marr') { const a = S.agents.find(x => x.id === id); a.arr = el.value || undefined; upd(); }
+  else if (act === 'maward') { if (!el.value) return; ((S.awards ||= {})[id] ||= {})[el.value] = { at: todayIso(), given: Date.now() }; upd(); }
+});
+document.addEventListener('input', e => { if (e.target.id === 'mq') { mq = e.target.value; const t = $('#mtb'); if (t) { render(); const i = $('#mq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } });
 
 // ---------- statistiques agent ----------
 let st = { id: null, f: 0, t: null, q: '' };
@@ -680,7 +865,7 @@ function staDetail(a) {
   const preset = [[0, 'Tout'], [4, '4 sem.'], [8, '8 sem.'], [12, '12 sem.']].map(([nn, l]) => { const on = nn ? f === Math.max(0, last - nn + 1) && t === last && last - nn + 1 >= 0 : f === 0 && t === last; return `<button class="seg${on ? ' on' : ''}" data-a="sper" data-n="${nn}">${l}</button>`; }).join('');
   const chip = (l, v) => `<span class="chip"><small>${l}</small>${v}</span>`;
   return `<section class="panel hero" style="--c:${gradeColor(a.grade)}"><div class="hero-l"><span class="av big">${esc(initials(a))}</span><div class="hero-id"><h2>${esc(full(a))}</h2><div class="sub-l">${badge(a.grade)}${a.arch ? `<span class="tag">Archivé le ${archDate(a)}${a.arch.why ? ' · ' + esc(a.arch.why) : ''}</span>` : ''}${a.mat && a.mat !== '-' ? `<span class="mono note">Matricule ${esc(a.mat)}</span>` : ''}</div>
-    <div class="chips">${chip('Premières heures', first < 0 ? '—' : 'sem. du ' + S.weeks[first])}${chip('Semaines suivies', all.n)}${chip('Total global', F(all.sum))}${chip('Moyenne globale', F(Math.round(all.avg)))}</div></div></div>
+    <div class="chips">${a.arr ? chip('Arrivée', fmtD(a.arr) + ' · ' + anc(a.arr)) : ''}${chip('Premières heures', first < 0 ? '—' : 'sem. du ' + S.weeks[first])}${chip('Semaines suivies', all.n)}${chip('Total global', F(all.sum))}${chip('Moyenne globale', F(Math.round(all.avg)))}</div>${agentMedals(a).length ? `<div class="mrow hero-med">${medRow(a)}</div>` : ''}${a.gdates && Object.keys(a.gdates).length ? `<div class="note gdl">${Object.entries(a.gdates).sort((p, q) => p[1].localeCompare(q[1])).map(([g, d]) => `${esc(g)} : ${fmtD(d)}`).join(' · ')}</div>` : ''}</div></div>
     <div class="hero-r"><small class="lbl">Période analysée</small><div class="segs">${preset}</div><div class="per"><select id="pf">${wopts(f)}</select><span class="note">→</span><select id="pe">${wopts(t)}</select></div></div></section>
   <div class="skg big3">${big('Total sur la période', F(s.sum), `${s.n} semaine(s) avec données`, 'hi')}${big('Moyenne / semaine', F(Math.round(s.avg)), s.n ? `district : ${F(Math.round(davg))}` : '', 'hi')}${big('Classement', rank ? `${rank}<small> / ${pool.length}</small>` : '–', 'à la moyenne sur la période')}</div>
   <div class="skg">${card('Semaines actives', `${s.act}<small> / ${s.n}</small>`)}${card('Meilleure semaine', F(s.best))}${card('Plus faible', F(s.low))}${card('Dernière semaine', F(s.last))}${card('Tendance 3 sem.', trend == null ? '–' : Fd(trend), trend == null ? '' : trend >= 0 ? 'up' : 'down')}${card('Écart au district', s.n ? Fd(s.avg - davg) : '–', s.n ? (s.avg >= davg ? 'up' : 'down') : '')}</div>

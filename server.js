@@ -18,12 +18,12 @@ const REDIRECT = BASE + '/discord.php', SECURE = BASE.startsWith('https');
 const SKF = path.join(DATA, 'secret.key'); let SECRET;
 try { SECRET = fs.readFileSync(SKF, 'utf8'); } catch (e) { SECRET = crypto.randomBytes(32).toString('hex'); fs.writeFileSync(SKF, SECRET, { mode: 0o600 }); }
 
-const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'set'];
-const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'cerEditDone', 'gradeEdit', 'actionEdit', 'sanctionEdit', 'usersManage', 'dataBackup', 'dataReset'];
+const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set'];
+const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'cerEditDone', 'gradeEdit', 'actionEdit', 'sanctionEdit', 'usersManage', 'medalEdit', 'sheetSync', 'dataBackup', 'dataReset'];
 const BUILTIN = ['admin', 'user', 'pending'];
 const defaultRoles = () => [
-  { id: 'admin', name: 'Administrateur', admin: true, builtin: true, tabs: TABS.slice(0, 5), perms: [...PERMS] },
-  { id: 'user', name: 'Utilisateur', builtin: true, tabs: TABS.slice(0, 5), perms: ['agentAdd', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'dataBackup'] },
+  { id: 'admin', name: 'Administrateur', admin: true, builtin: true, tabs: TABS.slice(0, 6), perms: [...PERMS] },
+  { id: 'user', name: 'Utilisateur', builtin: true, tabs: TABS.slice(0, 6), perms: ['agentAdd', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'dataBackup'] },
   { id: 'pending', name: 'En attente', builtin: true, tabs: [], perms: [] }];
 let db = { v: 1, sv: 0, state: null, users: [], roles: defaultRoles() };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DBF, 'utf8')) }; } catch (e) {}
@@ -34,6 +34,12 @@ if ((db.pv || 1) < 2) { // nouvelles permissions : on les accorde aux rôles qui
     if ((r.tabs || []).includes('set')) r.perms.push('gradeEdit', 'actionEdit', 'sanctionEdit');
     r.perms = [...new Set(r.perms)]; });
   db.pv = 2;
+}
+if ((db.pv || 1) < 3) { // onglet Médailles + permissions médailles / Google Sheet
+  db.roles.forEach(r => { if (r.admin) { r.perms = [...PERMS]; r.tabs = TABS.slice(0, 6); return; }
+    if ((r.tabs || []).includes('sta')) r.tabs = [...new Set([...r.tabs, 'med'])];
+    if ((r.perms || []).includes('cerEdit')) r.perms = [...new Set([...r.perms, 'medalEdit'])]; });
+  db.pv = 3;
 }
 const persist = () => { const t = DBF + '.tmp'; fs.writeFileSync(t, JSON.stringify(db)); fs.renameSync(t, DBF); };
 const touch = () => { db.v++; persist(); };
@@ -85,12 +91,19 @@ function cleanRoles(inp) {
     const name = r.name.trim().slice(0, 40); if (!name || names.has(name.toLowerCase())) return null; names.add(name.toLowerCase());
     const adm = r.id === 'admin';
     out.push({ id: r.id, name, ...(adm ? { admin: true } : {}), builtin: BUILTIN.includes(r.id),
-      tabs: adm ? TABS.slice(0, 5) : (Array.isArray(r.tabs) ? [...new Set(r.tabs.filter(t => TABS.includes(t)))] : []),
+      tabs: adm ? TABS.slice(0, 6) : (Array.isArray(r.tabs) ? [...new Set(r.tabs.filter(t => TABS.includes(t)))] : []),
       perms: adm ? [...PERMS] : (Array.isArray(r.perms) ? [...new Set(r.perms.filter(p => PERMS.includes(p)))] : []) });
   }
   if (!BUILTIN.every(id => out.some(r => r.id === id))) return null;
   if (!db.users.every(u => out.some(r => r.id === u.role))) return null;
   return out;
+}
+
+// lien Google Sheets -> URL d'export CSV (seul docs.google.com est accepté)
+function sheetUrl(link, gid) {
+  const id = (String(link).match(/docs\.google\.com\/spreadsheets\/d\/([\w-]{20,})/) || [])[1]; if (!id) return null;
+  const g = gid || (String(link).match(/[#&?]gid=(\d+)/) || [])[1];
+  return `https://docs.google.com/spreadsheets/d/${id}/export?format=csv${g && /^\d+$/.test(g) ? '&gid=' + g : ''}`;
 }
 
 // ---------- connexions : limitation des essais ----------
@@ -127,6 +140,16 @@ async function api(req, res, url, p) {
     if (!b.state || !Array.isArray(b.state.agents) || !Array.isArray(b.state.weeks)) return json(res, 400, { error: 'Données invalides' });
     if (b.base !== db.sv) return json(res, 409, { state: db.state, sv: db.sv, v: db.v });
     db.state = b.state; db.sv++; touch(); return json(res, 200, { sv: db.sv, v: db.v });
+  }
+  if (m === 'GET' && p === '/api/sheet') { // lecture d'un Google Sheet (CSV) côté serveur : pas de blocage CORS dans le navigateur
+    if (!isAdmin(u) && !roleOf(u).perms.includes('sheetSync')) return json(res, 403, { error: 'Droits insuffisants' });
+    const src = sheetUrl(url.searchParams.get('url') || '', url.searchParams.get('gid'));
+    if (!src) return json(res, 400, { error: 'Lien Google Sheets invalide.' });
+    try {
+      const r = await fetch(src, { redirect: 'follow' }), t = await r.text();
+      if (!r.ok || /^\s*<(!doctype|html)/i.test(t)) return json(res, 400, { error: `Google Sheets a refusé l’accès (HTTP ${r.status}) : le fichier doit être partagé « Tous les utilisateurs disposant du lien ».` });
+      return json(res, 200, { csv: t });
+    } catch (e) { return json(res, 502, { error: 'Google Sheets injoignable : ' + e.message }); }
   }
   if (m === 'POST' && p === '/api/me/password') {
     const b = await readBody(req);

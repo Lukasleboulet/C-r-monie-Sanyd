@@ -6,8 +6,8 @@ if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === 'lib.php') { http_response_c
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE); ini_set('display_errors', '0');
 
 const DATA_GUARD = "<?php http_response_code(404); exit; ?>\n"; // empêche la lecture directe des fichiers de données
-const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'set'];
-const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'cerEditDone', 'gradeEdit', 'actionEdit', 'sanctionEdit', 'usersManage', 'dataBackup', 'dataReset'];
+const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set'];
+const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'cerEditDone', 'gradeEdit', 'actionEdit', 'sanctionEdit', 'usersManage', 'medalEdit', 'sheetSync', 'dataBackup', 'dataReset'];
 const BUILTIN = ['admin', 'user', 'pending'];
 const JF = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
 
@@ -48,8 +48,8 @@ function secret() {
 }
 function default_roles() {
   return [
-    (object)['id' => 'admin', 'name' => 'Administrateur', 'admin' => true, 'builtin' => true, 'tabs' => array_slice(TABS, 0, 5), 'perms' => PERMS],
-    (object)['id' => 'user', 'name' => 'Utilisateur', 'builtin' => true, 'tabs' => array_slice(TABS, 0, 5), 'perms' => ['agentAdd', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'dataBackup']],
+    (object)['id' => 'admin', 'name' => 'Administrateur', 'admin' => true, 'builtin' => true, 'tabs' => array_slice(TABS, 0, 6), 'perms' => PERMS],
+    (object)['id' => 'user', 'name' => 'Utilisateur', 'builtin' => true, 'tabs' => array_slice(TABS, 0, 6), 'perms' => ['agentAdd', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'dataBackup']],
     (object)['id' => 'pending', 'name' => 'En attente', 'builtin' => true, 'tabs' => [], 'perms' => []]];
 }
 
@@ -76,6 +76,16 @@ function db_open() {
       $r->perms = array_values(array_unique($p));
     }
     $d->pv = 2; $GLOBALS['dbDirty'] = true;
+  }
+  if (($d->pv ?? 1) < 3) { // onglet Médailles + permissions médailles / Google Sheet
+    foreach ($d->roles as $r) {
+      if (!empty($r->admin)) { $r->perms = PERMS; $r->tabs = array_slice(TABS, 0, 6); continue; }
+      $t = (array)($r->tabs ?? []); $p = (array)($r->perms ?? []);
+      if (in_array('sta', $t)) $t[] = 'med';
+      if (in_array('cerEdit', $p)) $p[] = 'medalEdit';
+      $r->tabs = array_values(array_unique($t)); $r->perms = array_values(array_unique($p));
+    }
+    $d->pv = 3; $GLOBALS['dbDirty'] = true;
   }
   $db = $d;
 }
@@ -167,13 +177,20 @@ function clean_roles($inp) {
     $o = (object)['id' => $r->id, 'name' => $name];
     if ($adm) $o->admin = true;
     $o->builtin = in_array($r->id, BUILTIN, true);
-    $o->tabs = $adm ? array_slice(TABS, 0, 5) : array_values(array_unique(array_filter(is_array($r->tabs ?? null) ? $r->tabs : [], fn($t) => in_array($t, TABS, true))));
+    $o->tabs = $adm ? array_slice(TABS, 0, 6) : array_values(array_unique(array_filter(is_array($r->tabs ?? null) ? $r->tabs : [], fn($t) => in_array($t, TABS, true))));
     $o->perms = $adm ? PERMS : array_values(array_unique(array_filter(is_array($r->perms ?? null) ? $r->perms : [], fn($p) => in_array($p, PERMS, true))));
     $out[] = $o;
   }
   foreach (BUILTIN as $id) { $ok = false; foreach ($out as $r) if ($r->id === $id) $ok = true; if (!$ok) return null; }
   foreach ($db->users as $u) { $ok = false; foreach ($out as $r) if ($r->id === $u->role) $ok = true; if (!$ok) return null; }
   return $out;
+}
+
+// lien Google Sheets -> URL d'export CSV (seul docs.google.com est accepté)
+function sheet_url($link, $gid = null) {
+  if (!preg_match('#docs\.google\.com/spreadsheets/d/([\w-]{20,})#', (string)$link, $m)) return null;
+  if ($gid === null && preg_match('#[\#&?]gid=(\d+)#', (string)$link, $g)) $gid = $g[1];
+  return 'https://docs.google.com/spreadsheets/d/' . $m[1] . '/export?format=csv' . ($gid !== null && ctype_digit((string)$gid) ? '&gid=' . $gid : '');
 }
 
 // ---------- limitation des essais de connexion ----------
@@ -198,10 +215,11 @@ function curl_raw($url, $method, $headers, $body, $resolve = null) {
   $o = [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => $method, CURLOPT_HTTPHEADER => $headers, CURLOPT_TIMEOUT => 15, CURLOPT_CONNECTTIMEOUT => 8,
     CURLOPT_USERAGENT => 'SandyShore-MDT (https://github.com, 1.0)'];
   if ($resolve) $o[CURLOPT_RESOLVE] = $resolve;
+  $loc = null; $o[CURLOPT_HEADERFUNCTION] = function ($c, $h) use (&$loc) { if (stripos($h, 'location:') === 0) $loc = trim(substr($h, 9)); return strlen($h); };
   if ($body !== null) $o[CURLOPT_POSTFIELDS] = $body;
   curl_setopt_array($c, $o);
   $r = curl_exec($c); $code = curl_getinfo($c, CURLINFO_HTTP_CODE); $no = curl_errno($c); $err = curl_error($c); curl_close($c);
-  return [$r, $code, $no, $err];
+  return [$r, $code, $no, $err, $loc];
 }
 function doh_ips($host) {
   $ips = [];
@@ -213,19 +231,23 @@ function doh_ips($host) {
   }
   return $ips;
 }
-function http_req($url, $method = 'GET', $headers = [], $body = null) {
+function http_req($url, $method = 'GET', $headers = [], $body = null, $hops = 0) {
   if (function_exists('curl_init')) {
-    [$r, $code, $no, $err] = curl_raw($url, $method, $headers, $body);
+    [$r, $code, $no, $err, $loc] = curl_raw($url, $method, $headers, $body);
     if ($r === false && $no === 6) { // CURLE_COULDNT_RESOLVE_HOST
       $host = parse_url($url, PHP_URL_HOST); $tried = [];
       $ips = array_unique(array_merge(doh_ips($host), $host === 'discord.com' ? DISCORD_IPS : []));
       foreach ($ips as $ip) {
-        [$r, $code, $no, $err2] = curl_raw($url, $method, $headers, $body, ["$host:443:$ip"]);
+        [$r, $code, $no, $err2, $loc] = curl_raw($url, $method, $headers, $body, ["$host:443:$ip"]);
         if ($r !== false) break; $tried[] = "$ip ($err2)";
       }
       if ($r === false) throw new Exception('cURL : ' . $err . ($ips ? ' ; connexion directe impossible : ' . implode(', ', array_slice($tried, 0, 2)) : ' ; DNS-over-HTTPS indisponible'));
     }
     if ($r === false) throw new Exception('cURL : ' . $err);
+    if ($code >= 300 && $code < 400 && $loc && $hops < 5 && $method === 'GET') { // redirection (ex. Google Sheets -> googleusercontent.com)
+      $next = strpos($loc, 'http') === 0 ? $loc : preg_replace('#^(https?://[^/]+).*$#', '$1', $url) . $loc;
+      return http_req($next, 'GET', $headers, null, $hops + 1);
+    }
     return [$code, $r];
   }
   $ctx = stream_context_create(['http' => ['method' => $method, 'header' => implode("\r\n", array_merge($headers, ['User-Agent: SandyShore-MDT (https://github.com, 1.0)'])), 'content' => $body ?? '', 'ignore_errors' => true, 'timeout' => 15]]);

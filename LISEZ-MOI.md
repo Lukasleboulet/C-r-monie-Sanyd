@@ -52,6 +52,13 @@ Copie `config.example.json` en `config.json` :
 ## Statistiques agent
 Onglet **Statistiques** : choisis un agent → total / moyenne sur la **période de ton choix** (ou 4/8/12 dernières semaines), meilleure et plus faible semaine, tendance, classement et écart au district, graphique, **historique des grades** (création, modifications manuelles, décisions de cérémonie), sanctions, absences, formations et détail semaine par semaine.
 
+## Médailles & Google Sheet
+Onglet **Médailles** :
+- **Synchronisation Google Sheet** (permission « Synchro Google Sheet ») : colle le lien du Sheet (partagé « Tous les utilisateurs disposant du lien »), le district (« Sandy Shore »), puis **Synchroniser**. Un aperçu liste les agents à créer, les grades / matricules / dates d'arrivée à mettre à jour et les agents à archiver (absents du Sheet ou d'un autre district) ; décoche ce que tu ne veux pas, puis **Appliquer**. Les rangs masqués (Patron, Sheriff) sont ignorés. Les grades du Sheet sont reconnus automatiquement (« Officier II » = « Officier-2 »…) ; sinon l'aperçu te demande la correspondance.
+- **Date d'arrivée** = la plus ancienne des dates des colonnes de grades (Rookie, Officier…). Modifiable à la main.
+- **Rubans de service** : 2, 4, 6, 8, 10 et 12 mois d'ancienneté, attribués automatiquement ; liste « Rubans à remettre » avec bouton « Remis ».
+- **Médailles** : ajoute / supprime des médailles, avec une image (redimensionnée automatiquement) ou une couleur ; attribution manuelle ou à l'ancienneté.
+
 ## Données et sauvegarde
 - `data/db.json` : toutes les données (**à sauvegarder régulièrement**) · `data/secret.key` : clé des sessions (ne pas partager).
 - Mots de passe stockés hachés (scrypt + sel). Sessions par cookie sécurisé ; 5 essais ratés = blocage 30 s.

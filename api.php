@@ -48,6 +48,16 @@ function route() {
     if (($b->base ?? null) !== $db->sv) return out(409, ['state' => $db->state, 'sv' => $db->sv, 'v' => $db->v]);
     $db->state = $s; $db->sv++; touch_db(); return out(200, ['sv' => $db->sv, 'v' => $db->v]);
   }
+  if ($m === 'GET' && $r === 'sheet') { // lecture d'un Google Sheet (CSV) côté serveur
+    if (!is_admin($u) && !in_array('sheetSync', perms_of($u))) return out(403, ['error' => 'Droits insuffisants']);
+    $src = sheet_url($_GET['url'] ?? '', isset($_GET['gid']) && $_GET['gid'] !== '' ? $_GET['gid'] : null);
+    if (!$src) return out(400, ['error' => 'Lien Google Sheets invalide.']);
+    db_close(); // la lecture peut prendre quelques secondes : on libère la base
+    try { [$c, $t] = http_req($src); }
+    catch (Throwable $e) { return out(502, ['error' => 'Google Sheets injoignable : ' . $e->getMessage()]); }
+    if ($c !== 200 || preg_match('/^\s*<(!doctype|html)/i', $t)) return out(400, ['error' => "Google Sheets a refusé l’accès (HTTP $c) : le fichier doit être partagé « Tous les utilisateurs disposant du lien »."]);
+    return out(200, ['csv' => $t]);
+  }
   if ($m === 'POST' && $r === 'me/password') {
     if (!empty($u->hash) && empty($u->salt) && !check_pwd($u, $b->old ?? '')) return out(400, ['error' => 'Le mot de passe actuel est incorrect.']);
     $err = pwd_err($b->password ?? null); if ($err) return out(400, ['error' => $err]);
