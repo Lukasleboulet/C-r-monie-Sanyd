@@ -2,7 +2,17 @@
 
 Site + **serveur** : les comptes, les rôles et les données sont stockés sur le serveur et **partagés en direct** entre tous les ordinateurs (synchronisation toutes les 4 secondes, avec fusion des modifications simultanées).
 
-## Lancer
+## Héberger sur InfinityFree (ou tout hébergement PHP) — RECOMMANDÉ
+InfinityFree n'exécute **pas Node.js** : `server.js` n'y tourne pas, d'où l'absence de synchronisation. Le site contient donc un serveur **PHP** équivalent (`api.php`, `discord.php`, `lib.php`).
+1. Envoie **tout le contenu du dossier** dans `htdocs/` (FTP ou gestionnaire de fichiers), y compris `.htaccess`.
+2. (Discord) Copie `config.example.php` en `config.php` et renseigne `discordClientId` / `discordClientSecret`.
+3. Dans le portail Discord › OAuth2 › Redirects, ajoute : `https://TON-DOMAINE/discord.php` (l'URL exacte est affichée dans Paramètres › Comptes utilisateurs).
+4. Ouvre le site : le premier compte créé est administrateur. Le dossier `data/` est créé automatiquement (données protégées, non lisibles depuis le navigateur).
+- Active le **SSL gratuit** d'InfinityFree (https) : les cookies de session sont alors sécurisés.
+- Limite InfinityFree : ~50 000 requêtes/jour. La synchro interroge le serveur toutes les 5 s **seulement quand l'onglet est visible** (≈ 720 requêtes/heure par personne connectée).
+- Sauvegarde régulièrement `data/db.php` (ou bouton Sauvegarde).
+
+## Lancer en local avec Node.js (optionnel)
 1. Installe **Node.js 18 ou plus** (https://nodejs.org) — rien d'autre à installer.
 2. Dans le dossier : `node server.js` (ou `npm start`).
 3. Ouvre http://localhost:3000
@@ -23,7 +33,7 @@ Copie `config.example.json` en `config.json` :
 
 ## Connexion Discord
 1. https://discord.com/developers/applications → **New Application** → onglet **OAuth2**.
-2. **Redirects** → ajoute `<baseUrl>/auth/discord/callback` (ex. `http://localhost:3000/auth/discord/callback`). L'URL exacte est aussi affichée dans Paramètres › Comptes utilisateurs.
+2. **Redirects** → ajoute `<baseUrl>/discord.php` (ex. `http://localhost:3000/discord.php`). L'URL exacte est aussi affichée dans Paramètres › Comptes utilisateurs.
 3. Copie le **Client ID** et le **Client Secret** dans `config.json`, relance le serveur.
 - Le **tout premier compte** (identifiant ou Discord) est administrateur.
 - Ensuite, une personne qui se connecte avec Discord apparaît dans **Paramètres › Comptes utilisateurs** avec le rôle **En attente** (pastille orange sur l'onglet Paramètres) ; tu lui choisis son rôle, et ça s'applique tout de suite chez elle, sans reconnexion. Tu vois son **pseudo Discord** à côté de son ID.
@@ -31,7 +41,12 @@ Copie `config.example.json` en `config.json` :
 
 ## Rôles et permissions (Paramètres › Rôles et accès — administrateurs)
 - **Onglets accessibles** par rôle : Effectifs, Heures, Importer, Cérémonie, Statistiques, Paramètres (grades, options de décision, sanctions).
-- **Permissions** par rôle : créer / modifier / retirer des agents · saisir ou importer les heures · préparer la cérémonie · la valider · modifier une cérémonie validée · sauvegarde · restaurer / réinitialiser.
+- **Permissions** par rôle (bouton « tout » pour tout cocher) :
+  - Agents : créer · modifier · retirer
+  - Heures : saisir · importer · ajouter une semaine
+  - Cérémonie : préparer · valider · modifier une cérémonie validée
+  - Paramètres : grades · options de décision · sanctions · **gérer les comptes** (valider les comptes en attente, gérer les comptes non administrateurs ; contrôlé côté serveur)
+  - Données : sauvegarde · restaurer / réinitialiser
 - Rôles intégrés : **Administrateur** (tout), **Utilisateur** (permissions de base), **En attente** (aucun accès). Tu peux ajouter tes propres rôles ; les rôles et comptes ne se gèrent que par un administrateur (contrôlé côté serveur).
 
 ## Statistiques agent

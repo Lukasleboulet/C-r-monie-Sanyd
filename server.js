@@ -12,22 +12,29 @@ let C = {}; try { C = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'),
 const PORT = +(process.env.PORT || C.port || 3000);
 const BASE = (process.env.BASE_URL || C.baseUrl || `http://localhost:${PORT}`).replace(/\/$/, '');
 const DC = { id: process.env.DISCORD_CLIENT_ID || C.discordClientId || '', secret: process.env.DISCORD_CLIENT_SECRET || C.discordClientSecret || '' };
-const REDIRECT = BASE + '/auth/discord/callback', SECURE = BASE.startsWith('https');
+const REDIRECT = BASE + '/discord.php', SECURE = BASE.startsWith('https');
 
 // ---------- secret de session + base de données (fichiers JSON dans ./data) ----------
 const SKF = path.join(DATA, 'secret.key'); let SECRET;
 try { SECRET = fs.readFileSync(SKF, 'utf8'); } catch (e) { SECRET = crypto.randomBytes(32).toString('hex'); fs.writeFileSync(SKF, SECRET, { mode: 0o600 }); }
 
 const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'set'];
-const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'cerEdit', 'cerValidate', 'cerEditDone', 'dataBackup', 'dataReset'];
+const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'cerEditDone', 'gradeEdit', 'actionEdit', 'sanctionEdit', 'usersManage', 'dataBackup', 'dataReset'];
 const BUILTIN = ['admin', 'user', 'pending'];
 const defaultRoles = () => [
   { id: 'admin', name: 'Administrateur', admin: true, builtin: true, tabs: TABS.slice(0, 5), perms: [...PERMS] },
-  { id: 'user', name: 'Utilisateur', builtin: true, tabs: TABS.slice(0, 5), perms: ['agentAdd', 'hoursEdit', 'cerEdit', 'cerValidate', 'dataBackup'] },
+  { id: 'user', name: 'Utilisateur', builtin: true, tabs: TABS.slice(0, 5), perms: ['agentAdd', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'dataBackup'] },
   { id: 'pending', name: 'En attente', builtin: true, tabs: [], perms: [] }];
 let db = { v: 1, sv: 0, state: null, users: [], roles: defaultRoles() };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DBF, 'utf8')) }; } catch (e) {}
 defaultRoles().forEach((d, i) => { if (!db.roles.some(r => r.id === d.id)) db.roles.splice(Math.min(i, db.roles.length), 0, d); });
+if ((db.pv || 1) < 2) { // nouvelles permissions : on les accorde aux rôles qui avaient déjà l'accès équivalent
+  db.roles.forEach(r => { if (r.admin) { r.perms = [...PERMS]; return; } r.perms = r.perms || [];
+    if (r.perms.includes('hoursEdit')) r.perms.push('hoursImport', 'weekAdd');
+    if ((r.tabs || []).includes('set')) r.perms.push('gradeEdit', 'actionEdit', 'sanctionEdit');
+    r.perms = [...new Set(r.perms)]; });
+  db.pv = 2;
+}
 const persist = () => { const t = DBF + '.tmp'; fs.writeFileSync(t, JSON.stringify(db)); fs.renameSync(t, DBF); };
 const touch = () => { db.v++; persist(); };
 
@@ -59,10 +66,11 @@ const roleOf = u => db.roles.find(r => r.id === u.role) || db.roles.find(r => r.
 const isAdmin = u => !!roleOf(u).admin;
 const canRead = u => { const r = roleOf(u); return !!r.admin || r.tabs.length > 0 || r.perms.length > 0; };
 const canWrite = u => { const r = roleOf(u); return !!r.admin || r.perms.length > 0 || r.tabs.some(t => ['eff', 'hrs', 'imp', 'cer', 'set'].includes(t)); };
+const canManage = u => isAdmin(u) || roleOf(u).perms.includes('usersManage');
 const pub = u => ({ id: u.id, name: u.name, role: u.role, discordId: u.discordId || '', dname: u.dname || '', dun: u.dun || '', avatar: u.avatar || null, created: u.created, hasPwd: !!u.hash });
 const authed = req => { const t = readTok(cookies(req).sid); return t ? db.users.find(u => u.id === t.u) || null : null; };
 const flags = () => ({ discord: !!(DC.id && DC.secret), redirect: REDIRECT });
-const payload = u => ({ ...flags(), v: db.v, sv: db.sv, me: pub(u), roles: db.roles, state: canRead(u) ? db.state : undefined, users: isAdmin(u) ? db.users.map(pub) : undefined });
+const payload = u => ({ ...flags(), v: db.v, sv: db.sv, me: pub(u), roles: db.roles, state: canRead(u) ? db.state : undefined, users: canManage(u) ? db.users.map(pub) : undefined });
 const adminView = () => ({ v: db.v, users: db.users.map(pub), roles: db.roles });
 
 const nameErr = n => typeof n !== 'string' || n.length < 2 || n.length > 32 ? 'L’identifiant doit faire entre 2 et 32 caractères.' : /\s/.test(n) ? 'Pas d’espace dans l’identifiant.' : db.users.some(u => u.name.toLowerCase() === n.toLowerCase()) ? 'Cet identifiant existe déjà.' : '';
@@ -93,7 +101,8 @@ const login = (res, u, remember) => setCookie(res, 'sid', mkTok(u.id, 30 * 864e5
 
 // ---------- API ----------
 async function api(req, res, url, p) {
-  const m = req.method, u = authed(req), seg = p.split('/').filter(Boolean), ip = req.socket.remoteAddress;
+  let m = req.method; const u = authed(req), seg = p.split('/').filter(Boolean), ip = req.socket.remoteAddress;
+  if (url.searchParams.has('_m')) m = url.searchParams.get('_m').toUpperCase();
   if (m === 'GET' && p === '/api/boot') return json(res, 200, u ? payload(u) : { ...flags(), me: null, firstRun: !db.users.length });
   if (m === 'POST' && p === '/api/setup') {
     if (db.users.length) return json(res, 403, { error: 'Un compte existe déjà.' });
@@ -126,11 +135,12 @@ async function api(req, res, url, p) {
     setPwd(u, b.password); touch(); return json(res, 200, { ok: true });
   }
 
-  // ----- réservé aux administrateurs -----
-  if (!isAdmin(u)) return json(res, 403, { error: 'Réservé aux administrateurs' });
+  // ----- comptes : administrateurs + rôles avec « Gérer comptes » (sans toucher aux administrateurs) ; rôles : administrateurs -----
+  if (!canManage(u)) return json(res, 403, { error: 'Réservé aux administrateurs' });
+  const adm = isAdmin(u), roleOk = id => db.roles.some(r => r.id === id && (adm || !r.admin));
   if (m === 'POST' && p === '/api/users') {
     const b = await readBody(req), name = String(b.name || '').trim(), pwd = b.password || '', did = String(b.discordId || '').trim();
-    const err = nameErr(name) || didErr(did) || (pwd || !did ? pwdErr(pwd) : '') || (db.roles.some(r => r.id === b.role) ? '' : 'Rôle inconnu.');
+    const err = nameErr(name) || didErr(did) || (pwd || !did ? pwdErr(pwd) : '') || (roleOk(b.role) ? '' : 'Rôle inconnu ou non autorisé.');
     if (err) return json(res, 400, { error: err });
     const nu = { id: uid(), name, role: b.role, created: Date.now() }; if (did) nu.discordId = did; if (pwd) setPwd(nu, pwd);
     db.users.push(nu); touch(); return json(res, 200, adminView());
@@ -138,10 +148,11 @@ async function api(req, res, url, p) {
   if (seg[1] === 'users' && seg[2]) {
     const t = db.users.find(x => x.id === seg[2]); if (!t) return json(res, 404, { error: 'Compte introuvable' });
     const admins = () => db.users.filter(isAdmin).length;
+    if (!adm && isAdmin(t)) return json(res, 403, { error: 'Seul un administrateur peut modifier un compte administrateur.' });
     if (m === 'PATCH' && seg.length === 3) {
       const b = await readBody(req);
       if ('role' in b) {
-        const r = db.roles.find(x => x.id === b.role); if (!r) return json(res, 400, { error: 'Rôle inconnu.' });
+        const r = db.roles.find(x => x.id === b.role); if (!r || !roleOk(r.id)) return json(res, 400, { error: 'Rôle inconnu ou non autorisé.' });
         if (isAdmin(t) && !r.admin && admins() < 2) return json(res, 400, { error: 'Il doit rester au moins un administrateur.' });
         t.role = b.role;
       }
@@ -163,6 +174,7 @@ async function api(req, res, url, p) {
     }
   }
   if (m === 'PUT' && p === '/api/roles') {
+    if (!adm) return json(res, 403, { error: 'Réservé aux administrateurs' });
     const b = await readBody(req), r = cleanRoles(b.roles); if (!r) return json(res, 400, { error: 'Rôles invalides (nom en double, rôle intégré manquant ou rôle encore utilisé).' });
     db.roles = r; touch(); return json(res, 200, adminView());
   }
@@ -172,7 +184,7 @@ async function api(req, res, url, p) {
 // ---------- connexion Discord (OAuth2, flux « code » : le secret reste ici) ----------
 function discordStart(req, res) {
   const go = loc => { res.writeHead(302, { Location: loc }); res.end(); };
-  if (!DC.id || !DC.secret) return go('/?dc=conf');
+  if (!DC.id || !DC.secret) return go('./?dc=conf');
   const st = crypto.randomBytes(16).toString('hex'); setCookie(res, 'dst', st, 600);
   go('https://discord.com/oauth2/authorize?' + new URLSearchParams({ client_id: DC.id, response_type: 'code', scope: 'identify', redirect_uri: REDIRECT, state: st }));
 }
@@ -186,7 +198,7 @@ function upsertDiscord(pf) {
   u.dname = pf.global_name || pf.username || ''; u.dun = pf.username || ''; u.avatar = pf.avatar || null; touch(); return u;
 }
 async function discordCb(req, res, url) {
-  const back = c => { res.writeHead(302, { Location: '/?dc=' + c }); res.end(); };
+  const back = c => { res.writeHead(302, { Location: './?dc=' + c }); res.end(); };
   const st = url.searchParams.get('state'), code = url.searchParams.get('code'), ck = cookies(req).dst; setCookie(res, 'dst', '', -1);
   if (!code) return back('denied');
   if (!st || st !== ck) return back('state');
@@ -217,6 +229,8 @@ function serveStatic(req, res, p) {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, BASE), p = url.pathname;
+    if (p === '/api.php') return await api(req, res, url, '/api/' + (url.searchParams.get('r') || '').replace(/^\/+/, ''));
+    if (p === '/discord.php') return url.searchParams.has('code') || url.searchParams.has('error') ? await discordCb(req, res, url) : discordStart(req, res);
     if (p.startsWith('/api/')) return await api(req, res, url, p);
     if (p === '/auth/discord') return discordStart(req, res);
     if (p === '/auth/discord/callback') return await discordCb(req, res, url);

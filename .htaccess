@@ -1,0 +1,22 @@
+# SAMP · Sandy Shore — hébergement PHP (InfinityFree, etc.)
+DirectoryIndex index.html
+Options -Indexes
+# Fichiers à ne jamais servir
+<FilesMatch "^(lib\.php|config\.php|config\.example\.php|server\.js|seed\.json|package\.json|config\.json|LISEZ-MOI\.md|\.gitignore)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+# Pas de cache pour l'API
+<IfModule mod_headers.c>
+  <FilesMatch "\.(php|json)$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate"
+  </FilesMatch>
+  <FilesMatch "\.(js|css|html)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>

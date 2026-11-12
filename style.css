@@ -267,3 +267,15 @@ h3.sub{margin:16px 0 8px;font-size:.78rem;font-weight:700;letter-spacing:.12em;t
 .tli b{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.tli span{display:block;margin-top:2px;color:var(--mute);font-size:.82rem}.tli em{display:block;margin-top:2px;font-style:normal;font-size:.86rem}
 html.light .sk{background:#fff6e6}html.light .sk.hi b{color:var(--t)}html.light .ucard i.dcn{color:#4f5bd5}
 @media(max-width:950px){.sgrid{grid-template-columns:1fr}.sl{position:static}.alist{max-height:260px}}
+/* permissions groupées, comptes (pseudo Discord), sections en lecture seule */
+fieldset.ro{border:0;margin:0;padding:0;min-width:0;opacity:.6}
+fieldset.ro .btn{display:none}
+.ptab th.pg{text-align:center;border-left:1px solid var(--line2);color:var(--acc2)}
+.ptab th.pgs,.ptab tr td.ck:nth-child(2),.ptab td.ck:nth-child(5),.ptab td.ck:nth-child(8),.ptab td.ck:nth-child(11),.ptab td.ck:nth-child(15){border-left:1px solid var(--line2)}
+.btn.mini-b{padding:2px 8px;font-size:.7rem;margin-left:6px;vertical-align:middle}
+.av.img{background-size:cover;background-position:center;border-color:rgba(88,101,242,.6)}
+.dpn{display:inline-flex;align-items:center;gap:7px;min-width:210px;padding:9px 12px;border:1px dashed var(--line2);border-radius:12px;color:var(--mute);font-size:.86rem;white-space:nowrap}
+.dpn svg{width:16px;height:16px;fill:currentColor;flex:none}
+.dpn.on{border-style:solid;border-color:rgba(88,101,242,.55);background:rgba(88,101,242,.12);color:var(--fg)}
+.dpn.on svg{color:#8b95ff}
+.dpn i{font-style:normal;opacity:.7}
