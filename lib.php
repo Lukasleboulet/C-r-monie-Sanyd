@@ -189,12 +189,42 @@ function add_fail() { $ip = client_ip(); fails_rw(function (&$a) use ($ip) { $f 
 function clear_fail() { $ip = client_ip(); fails_rw(function (&$a) use ($ip) { unset($a[$ip]); }); }
 
 // ---------- HTTP sortant (Discord) ----------
+// Certains hébergeurs gratuits (InfinityFree…) bloquent la résolution DNS : « Could not resolve host ».
+// Dans ce cas on obtient l'IP via DNS-over-HTTPS (1.1.1.1 / 8.8.8.8, interrogés par IP), sinon des IP connues de Discord,
+// puis on se connecte directement à cette IP (le certificat HTTPS reste vérifié pour le vrai nom d'hôte).
+const DISCORD_IPS = ['162.159.137.232', '162.159.135.232', '162.159.136.232', '162.159.138.232', '162.159.128.233'];
+function curl_raw($url, $method, $headers, $body, $resolve = null) {
+  $c = curl_init($url);
+  $o = [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => $method, CURLOPT_HTTPHEADER => $headers, CURLOPT_TIMEOUT => 15, CURLOPT_CONNECTTIMEOUT => 8,
+    CURLOPT_USERAGENT => 'SandyShore-MDT (https://github.com, 1.0)'];
+  if ($resolve) $o[CURLOPT_RESOLVE] = $resolve;
+  if ($body !== null) $o[CURLOPT_POSTFIELDS] = $body;
+  curl_setopt_array($c, $o);
+  $r = curl_exec($c); $code = curl_getinfo($c, CURLINFO_HTTP_CODE); $no = curl_errno($c); $err = curl_error($c); curl_close($c);
+  return [$r, $code, $no, $err];
+}
+function doh_ips($host) {
+  $ips = [];
+  foreach (['https://1.1.1.1/dns-query?name=', 'https://8.8.8.8/resolve?name=', 'https://1.0.0.1/dns-query?name='] as $u) {
+    [$r, $code] = curl_raw($u . rawurlencode($host) . '&type=A', 'GET', ['Accept: application/dns-json'], null);
+    $j = $r ? json_decode($r) : null;
+    foreach ($j->Answer ?? [] as $a) if (($a->type ?? 0) == 1 && filter_var($a->data ?? '', FILTER_VALIDATE_IP)) $ips[] = $a->data;
+    if ($ips) break;
+  }
+  return $ips;
+}
 function http_req($url, $method = 'GET', $headers = [], $body = null) {
   if (function_exists('curl_init')) {
-    $c = curl_init($url);
-    curl_setopt_array($c, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => $method, CURLOPT_HTTPHEADER => $headers, CURLOPT_TIMEOUT => 15, CURLOPT_USERAGENT => 'SandyShore-MDT (https://github.com, 1.0)']);
-    if ($body !== null) curl_setopt($c, CURLOPT_POSTFIELDS, $body);
-    $r = curl_exec($c); $code = curl_getinfo($c, CURLINFO_HTTP_CODE); $err = curl_error($c); curl_close($c);
+    [$r, $code, $no, $err] = curl_raw($url, $method, $headers, $body);
+    if ($r === false && $no === 6) { // CURLE_COULDNT_RESOLVE_HOST
+      $host = parse_url($url, PHP_URL_HOST); $tried = [];
+      $ips = array_unique(array_merge(doh_ips($host), $host === 'discord.com' ? DISCORD_IPS : []));
+      foreach ($ips as $ip) {
+        [$r, $code, $no, $err2] = curl_raw($url, $method, $headers, $body, ["$host:443:$ip"]);
+        if ($r !== false) break; $tried[] = "$ip ($err2)";
+      }
+      if ($r === false) throw new Exception('cURL : ' . $err . ($ips ? ' ; connexion directe impossible : ' . implode(', ', array_slice($tried, 0, 2)) : ' ; DNS-over-HTTPS indisponible'));
+    }
     if ($r === false) throw new Exception('cURL : ' . $err);
     return [$code, $r];
   }
