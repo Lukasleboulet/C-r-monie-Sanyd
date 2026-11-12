@@ -39,6 +39,9 @@ Copie `config.example.json` en `config.json` :
 - Ensuite, une personne qui se connecte avec Discord apparaît dans **Paramètres › Comptes utilisateurs** avec le rôle **En attente** (pastille orange sur l'onglet Paramètres) ; tu lui choisis son rôle, et ça s'applique tout de suite chez elle, sans reconnexion. Tu vois son **pseudo Discord** à côté de son ID.
 - Tu peux aussi créer le compte à l'avance (identifiant + ID Discord, mot de passe facultatif).
 
+## Connexion uniquement avec Discord
+Dès que Discord est configuré, **seule la connexion Discord est possible** : le formulaire identifiant / mot de passe disparaît et le serveur le refuse. Pour qu'un ancien compte (créé avec un mot de passe) puisse se connecter, renseigne son **ID Discord** dans Paramètres › Comptes utilisateurs. En cas de panne de Discord, `'passwordLogin' => true` dans `config.php` réactive temporairement les mots de passe.
+
 ## Rôles et permissions (Paramètres › Rôles et accès — administrateurs)
 - **Onglets accessibles** par rôle : Effectifs, Heures, Importer, Cérémonie, Statistiques, Paramètres (grades, options de décision, sanctions).
 - **Permissions** par rôle (bouton « tout » pour tout cocher) :

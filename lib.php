@@ -12,7 +12,7 @@ const BUILTIN = ['admin', 'user', 'pending'];
 const JF = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
 
 $ROOT = __DIR__; $DATA = $ROOT . '/data';
-$CONFIG = ['baseUrl' => '', 'discordClientId' => '', 'discordClientSecret' => ''];
+$CONFIG = ['baseUrl' => '', 'discordClientId' => '', 'discordClientSecret' => '', 'passwordLogin' => false];
 if (is_file($ROOT . '/config.php')) { $c = include $ROOT . '/config.php'; if (is_array($c)) $CONFIG = array_merge($CONFIG, $c); }
 
 function base_url() {
@@ -139,7 +139,8 @@ function pub($u) {
 }
 function find_user($id) { global $db; foreach ($db->users as $u) if ($u->id === $id) return $u; return null; }
 function authed() { $t = read_tok($_COOKIE['sid'] ?? ''); return $t ? find_user($t->u) : null; }
-function flags() { return ['discord' => discord_on(), 'redirect' => redirect_uri()]; }
+function pwd_on() { global $CONFIG; return !discord_on() || !empty($CONFIG['passwordLogin']); } // identifiant + mot de passe : seulement sans Discord (ou secours activé)
+function flags() { return ['discord' => discord_on(), 'redirect' => redirect_uri(), 'pwd' => pwd_on()]; }
 function payload($u) {
   global $db;
   $p = flags() + ['v' => $db->v, 'sv' => $db->sv, 'me' => pub($u), 'roles' => $db->roles];

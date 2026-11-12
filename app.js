@@ -156,16 +156,16 @@ const mgr = () => admin || can('usersManage'); // gestion des comptes (non admin
 function vSet() {
   if (!admin && !(roleOf(me).tabs || []).includes('set')) return usersPanel(); // accès uniquement via « Gérer les comptes »
   return `<section class="panel"><h2>Grades (du plus haut au plus bas)</h2>${can('gradeEdit') ? '' : '<p class="note">Lecture seule.</p>'}` + lockFs('gradeEdit', 
-    S.grades.map((g, i) => `<div class="frm"><button class="btn ghost" data-a="gup" data-i="${i}" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost" data-a="gdn" data-i="${i}" ${i < S.grades.length - 1 ? '' : 'disabled'}>▼</button><input data-a="gname" data-i="${i}" value="${esc(g)}"><input type="color" class="col" data-a="gcol" data-i="${i}" value="${gradeColor(g)}" title="Couleur du grade"><button class="btn ghost" data-a="gcolr" data-i="${i}" title="Couleur par défaut">↺</button><span class="note">${S.agents.filter(a => a.grade === g).length} agent(s)</span><button class="btn del" data-a="gdel" data-i="${i}">Retirer</button></div>`).join('') +
+    S.grades.map((g, i) => `<div class="frm srow gr"><button class="btn ghost" data-a="gup" data-i="${i}" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost" data-a="gdn" data-i="${i}" ${i < S.grades.length - 1 ? '' : 'disabled'}>▼</button><input data-a="gname" data-i="${i}" value="${esc(g)}"><input type="color" class="col" data-a="gcol" data-i="${i}" value="${gradeColor(g)}" title="Couleur du grade"><button class="btn ghost" data-a="gcolr" data-i="${i}" title="Couleur par défaut">↺</button><span class="note">${S.agents.filter(a => a.grade === g).length} agent(s)</span><button class="btn del" data-a="gdel" data-i="${i}">Retirer</button></div>`).join('') +
     `<div class="frm"><input id="gn" placeholder="Nouveau grade (ajouté en bas, puis déplace-le avec ▲)"><button class="btn gold" data-a="gadd">Ajouter</button></div>`) + `</section>
   <section class="panel"><h2>Rangs masqués</h2><p class="note">Les lignes de ces rangs sont ignorées à l’import (heures, création d’agent et de grade) et les agents de ces rangs n’apparaissent nulle part — sauf ceux que tu as ajoutés toi-même dans Effectifs. ${(() => { const n = S.agents.filter(hiddenA).length; return n ? `<b>${n}</b> agent(s) actuellement masqué(s).` : ''; })()}</p>` + lockFs('gradeEdit',
     `<div class="frm">${(S.ignRanks || []).map((x, i) => `<span class="tag">${esc(x)} <button class="btn del mini-b" data-a="irdel" data-i="${i}" title="Ne plus masquer">✕</button></span>`).join('') || '<span class="note">Aucun rang masqué.</span>'}</div>
     <div class="frm"><input id="irn" placeholder="Rang à masquer (ex : Patron)"><button class="btn gold" data-a="iradd">Ajouter</button></div>`) + `</section>
   <section class="panel"><h2>Options de décision (cérémonie)</h2><p class="note">Chaque option peut monter ou descendre d’un ou deux grades, ne rien changer, ou envoyer vers un grade précis (ex : Passe à SLO). Dans la cérémonie, le nouveau grade reste modifiable.</p>` + lockFs('actionEdit',
-    S.actions.map((x, i) => `<div class="frm">${mvBtns('a', i, S.actions.length)}<input data-a="aname" data-id="${x.id}" value="${esc(x.label)}"><select data-a="aeff" data-id="${x.id}">${effOpts(x.to !== undefined ? 'fix' : x.mv)}</select>${x.to !== undefined ? `<select data-a="ato" data-id="${x.id}">${gopts(x.to)}</select>` : ''}<button class="btn del" data-a="adel" data-id="${x.id}">Retirer</button></div>`).join('') +
+    S.actions.map((x, i) => `<div class="frm srow ac">${mvBtns('a', i, S.actions.length)}<input data-a="aname" data-id="${x.id}" value="${esc(x.label)}"><select data-a="aeff" data-id="${x.id}">${effOpts(x.to !== undefined ? 'fix' : x.mv)}</select>${x.to !== undefined ? `<select data-a="ato" data-id="${x.id}">${gopts(x.to)}</select>` : '<span></span>'}<button class="btn del" data-a="adel" data-id="${x.id}">Retirer</button></div>`).join('') +
     `<div class="frm"><input id="an2" placeholder="Nouvelle option"><select id="ae">${effOpts(0)}</select><select id="at" hidden>${gopts(S.grades[0])}</select><button class="btn gold" data-a="aadd">Ajouter</button></div>`) + `</section>
   <section class="panel"><h2>Sanctions (menu déroulant de la cérémonie)</h2>` + lockFs('sanctionEdit',
-    S.sanctions.map((x, i) => `<div class="frm">${mvBtns('s', i, S.sanctions.length)}<input data-a="sname" data-i="${i}" value="${esc(x)}"><button class="btn del" data-a="sdel" data-i="${i}">Retirer</button></div>`).join('') +
+    S.sanctions.map((x, i) => `<div class="frm srow sa">${mvBtns('s', i, S.sanctions.length)}<input data-a="sname" data-i="${i}" value="${esc(x)}"><button class="btn del" data-a="sdel" data-i="${i}">Retirer</button></div>`).join('') +
     `<div class="frm"><input id="sn" placeholder="Nouvelle sanction (ex : Mise à pied 48h)"><button class="btn gold" data-a="sadd">Ajouter</button></div>`) + `</section>` + (admin ? rolesPanel() : '') + (mgr() ? usersPanel() : '');
 }
 
@@ -190,6 +190,7 @@ function render() {
   { const pend = mgr() ? users.filter(u => u.role === 'pending').length : 0, sb = $('#nav [data-t="set"]'); if (pend) sb.dataset.n = pend; else delete sb.dataset.n; }
   if (me) { $('#un').textContent = me.name; $('#ur').textContent = roleOf(me).name; { const dp = me.dname ? (me.dun ? '@' + me.dun : me.dname) : ''; $('#ud').textContent = dp; $('#ud').hidden = !dp; } { const av = me.discordId && me.avatar ? `https://cdn.discordapp.com/avatars/${me.discordId}/${me.avatar}.png?size=64` : ''; $('#uav').style.backgroundImage = av ? `url(${av})` : ''; $('#uav').textContent = av ? '' : me.name.slice(0, 2); } $('#ucard').classList.toggle('adm', admin); $('#rn').textContent = roleOf(me).name; $('#rl').textContent = admin ? 'accès total' : `${roleOf(me).tabs.length} onglet(s) · ${(roleOf(me).perms || []).length} permission(s)`; }
   setTopH();
+  $('#pw').hidden = !pwdOn;
   $('#bk').hidden = !can('dataBackup'); $('#rz').hidden = $('#rs').parentElement.hidden = !can('dataReset');
 }
 function setTopH() { const t = $('.top'), m = $('.main'); if (t && m) m.style.setProperty('--toph', t.offsetHeight - 22 + 'px'); const h = $('.cer thead tr'); if (h && m) m.style.setProperty('--h1', h.offsetHeight + 'px'); } // hauteur de l'en-tête collant (les en-têtes de tableau se placent dessous)
@@ -330,7 +331,7 @@ document.addEventListener('click', async e => {
   else if (act === 'aup' || act === 'adn') { swap(S.actions, +el.dataset.i, act === 'aup' ? -1 : 1); upd(); }
   else if (act === 'sup' || act === 'sdn') { swap(S.sanctions, +el.dataset.i, act === 'sup' ? -1 : 1); upd(); }
   else if (act === 'uadd') {
-    if (await adminCall('POST', '/api/users', { name: $('#nu').value.trim(), password: $('#np').value, discordId: $('#nd').value.trim(), role: $('#nr').value })) render();
+    if (await adminCall('POST', '/api/users', { name: $('#nu').value.trim(), password: $('#np')?.value || '', discordId: $('#nd').value.trim(), role: $('#nr').value })) render();
   } else if (act === 'udel') {
     const u = users.find(x => x.id === id); if (!u || u.id === me.id) return;
     if (await dlg({ title: 'Retirer le compte', msg: `Supprimer le compte « ${u.name} » ?`, ok: 'Retirer', danger: true }) && await adminCall('DELETE', `/api/users/${id}`)) render();
@@ -485,7 +486,7 @@ const PERM_GROUPS = [
   ['Médailles', [['medalEdit', 'Gérer / remettre'], ['sheetSync', 'Synchro Google Sheet']]],
   ['Données', [['dataBackup', 'Sauvegarde'], ['dataReset', 'Restaurer / réinit.']]]];
 const PERMS = PERM_GROUPS.flatMap(g => g[1]);
-let roles = [], users = [], firstRun = false, discordOn = false, redirUrl = '', dcMsg = '';
+let pwdOn = true, roles = [], users = [], firstRun = false, discordOn = false, redirUrl = '', dcMsg = '';
 let SV = 0, VV = 0, S0 = null, saving = false, dirty = false, saveTimer = null, needRender = false;
 const roleOf = u => roles.find(r => r.id === u.role) || roles.find(r => r.id === 'user') || { name: '?', tabs: [], perms: [] };
 const canTab = t => !!me && !!t && (admin || (roleOf(me).tabs || []).includes(t));
@@ -559,15 +560,17 @@ async function sync() { // toutes les 4 s : récupère les changements des autre
 async function load() {
   let j; try { j = (await api('GET', '/api/boot')).json; } catch (e) { j = null; }
   if (!j) { setSync('off', 'Serveur injoignable'); firstRun = false; showLogin(); $('#le').textContent = 'Serveur injoignable : vérifie que api.php est bien en ligne (hébergement PHP) ou lance « node server.js ».'; return; }
-  firstRun = !!j.firstRun; discordOn = !!j.discord; redirUrl = j.redirect || '';
+  firstRun = !!j.firstRun; discordOn = !!j.discord; pwdOn = j.pwd !== false; redirUrl = j.redirect || '';
   if (!j.me) { me = null; admin = false; users = []; roles = []; render(); showLogin(); if (dcMsg) $('#le').textContent = dcMsg; return; }
   applyPayload(j); setSync('ok', 'Synchronisé avec le serveur'); $('#login').hidden = true; tab = TABS.find(canTab) || null; render();
 }
 function showLogin() {
   $('#lt').textContent = firstRun ? 'Création du compte administrateur' : 'Connexion';
   $('#ls').textContent = firstRun ? 'Aucun compte n’existe encore : le premier compte sera administrateur (identifiant ou Discord).' : 'Accès réservé aux membres enregistrés.';
-  $('#lc').hidden = !firstRun; $('#lb').textContent = firstRun ? 'Créer le compte' : 'Se connecter';
-  $('#lu').value = $('#lp').value = $('#lp2').value = ''; $('#le').textContent = ''; $('#login').hidden = false; $('#lu').focus();
+  $('#lc').hidden = !firstRun || !pwdOn; $('#lb').textContent = firstRun ? 'Créer le compte' : 'Se connecter';
+  document.querySelectorAll('#lf .fld:not(#lc), #lf .lrem, #lb, #lf .lsep').forEach(e => e.hidden = !pwdOn); // Discord uniquement
+  if (!pwdOn) $('#ls').textContent = firstRun ? 'Aucun compte n’existe encore : le premier compte connecté avec Discord sera administrateur.' : 'Connecte-toi avec ton compte Discord.';
+  $('#lu').value = $('#lp').value = $('#lp2').value = ''; $('#le').textContent = ''; $('#login').hidden = false; if (pwdOn) $('#lu').focus();
 }
 $('#lf').onsubmit = async e => {
   e.preventDefault();
@@ -631,12 +634,12 @@ function usersPanel() {
     return `<div class="frm${u.role === 'pending' ? ' pend' : ''}">${avHtml(u)}<b class="uname">${esc(u.name)}${u.id === me?.id ? ' <span class="note">(toi)</span>' : ''}${u.role === 'pending' ? ' <span class="tag">En attente</span>' : ''}</b>` +
       `<input class="ein" style="width:170px" data-a="udid" data-id="${u.id}" placeholder="ID Discord" value="${esc(u.discordId || '')}" ${lockU ? 'disabled' : ''}>` +
       `<span class="dpn${u.dname ? ' on' : ''}" title="Pseudo Discord (rempli automatiquement à la connexion avec Discord)"><svg viewBox="0 0 24 24"><path d="M7.2 6.2c1.6-.7 3.3-1 4.8-1s3.2.3 4.8 1l1.7 1.9c1.4 2.6 2 5.4 1.8 8.4-1.4 1.1-3.1 1.8-4.4 2.1l-1.1-1.7c.9-.2 1.7-.6 2.4-1.1-.2-.1-.5-.3-.7-.5-2.3 1-5.1 1-7.4 0-.2.2-.5.4-.7.5.7.5 1.5.9 2.4 1.1l-1.1 1.7c-1.3-.3-3-1-4.4-2.1-.2-3 .4-5.8 1.8-8.4z"/></svg>${u.dname ? esc(dpseudo(u)) : '<i>non connecté avec Discord</i>'}</span>` +
-      (lockU ? `<span class="tag">${esc(roleOf(u).name)}</span>` : `<select class="cin" data-a="urole" data-id="${u.id}">${ro(u.role)}</select><button class="btn ghost" data-a="upw" data-id="${u.id}">Mot de passe</button>${u.id === me?.id ? '' : `<button class="btn del" data-a="udel" data-id="${u.id}">Retirer</button>`}`) + `</div>`;
+      (lockU ? `<span class="tag">${esc(roleOf(u).name)}</span>` : `<select class="cin" data-a="urole" data-id="${u.id}">${ro(u.role)}</select>${pwdOn ? `<button class="btn ghost" data-a="upw" data-id="${u.id}">Mot de passe</button>` : ''}${u.id === me?.id ? '' : `<button class="btn del" data-a="udel" data-id="${u.id}">Retirer</button>`}`) + `</div>`;
   };
   return `<section class="panel"><h2>Comptes utilisateurs <span class="note">(${users.length})</span></h2><p class="note">Les comptes sont enregistrés sur le serveur et partagés entre tous les ordinateurs. Le rôle de chaque compte détermine les onglets et les actions autorisés (voir « Rôles et accès »).</p>
   ${admin ? `<p class="note">Connexion Discord : <b>${discordOn ? 'configurée' : 'non configurée'}</b> · URL de redirection à enregistrer dans le portail Discord : <code class="mono">${esc(redirUrl)}</code></p>` : ''}<p class="note">Quand quelqu’un se connecte avec Discord pour la première fois, son compte apparaît ci-dessous avec le rôle « En attente » et son pseudo Discord : choisis-lui simplement son rôle. Tu peux aussi créer son compte à l’avance avec son ID Discord.</p>` +
     [...users].sort((a, b) => (b.role === 'pending') - (a.role === 'pending')).map(row).join('') +
-    `<div class="frm"><input id="nu" placeholder="Identifiant" autocomplete="off"><input id="nd" placeholder="ID Discord (optionnel)" autocomplete="off"><input id="np" type="password" placeholder="Mot de passe (facultatif avec Discord)" autocomplete="new-password"><select id="nr">${ro('user')}</select><button class="btn gold" data-a="uadd">Créer le compte</button></div></section>`;
+    `<div class="frm"><input id="nu" placeholder="Identifiant" autocomplete="off"><input id="nd" placeholder="ID Discord${pwdOn ? ' (optionnel)' : ''}" autocomplete="off">${pwdOn ? '<input id="np" type="password" placeholder="Mot de passe (facultatif avec Discord)" autocomplete="new-password">' : ''}<select id="nr">${ro('user')}</select><button class="btn gold" data-a="uadd">Créer le compte</button></div></section>`;
 }
 
 // ---------- médailles, rubans de service & synchronisation Google Sheet ----------

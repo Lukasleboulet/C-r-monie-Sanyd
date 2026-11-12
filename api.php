@@ -19,6 +19,7 @@ function route() {
   $u = authed(); $b = in_array($m, ['POST', 'PUT', 'PATCH', 'DELETE']) ? body() : (object)[];
 
   if ($m === 'GET' && $r === 'boot') return out(200, $u ? payload($u) : flags() + ['me' => null, 'firstRun' => !count($db->users)]);
+  if (!pwd_on() && $m === 'POST' && in_array($r, ['setup', 'login'])) return out(403, ['error' => 'Connexion uniquement avec Discord.']);
   if ($m === 'POST' && $r === 'setup') {
     if (count($db->users)) return out(403, ['error' => 'Un compte existe déjà.']);
     $name = trim((string)($b->name ?? '')); $err = name_err($name) ?: pwd_err($b->password ?? null);
@@ -59,6 +60,7 @@ function route() {
     return out(200, ['csv' => $t]);
   }
   if ($m === 'POST' && $r === 'me/password') {
+    if (!pwd_on()) return out(403, ['error' => 'Connexion uniquement avec Discord : pas de mot de passe.']);
     if (!empty($u->hash) && empty($u->salt) && !check_pwd($u, $b->old ?? '')) return out(400, ['error' => 'Le mot de passe actuel est incorrect.']);
     $err = pwd_err($b->password ?? null); if ($err) return out(400, ['error' => $err]);
     set_pwd($u, $b->password); touch_db(); return out(200, ['ok' => true]);
@@ -70,7 +72,8 @@ function route() {
   $roleOk = function ($id) use ($adm) { $r = find_role((string)$id); return $r && ($adm || empty($r->admin)); };
 
   if ($m === 'POST' && $r === 'users') {
-    $name = trim((string)($b->name ?? '')); $pwd = (string)($b->password ?? ''); $did = trim((string)($b->discordId ?? ''));
+    $name = trim((string)($b->name ?? '')); $pwd = pwd_on() ? (string)($b->password ?? '') : ''; $did = trim((string)($b->discordId ?? ''));
+    if (!pwd_on() && $did === '') return out(400, ['error' => 'Connexion uniquement avec Discord : renseigne l’ID Discord du compte.']);
     $err = name_err($name) ?: did_err($did) ?: (($pwd !== '' || $did === '') ? pwd_err($pwd) : '') ?: ($roleOk($b->role ?? '') ? '' : 'Rôle inconnu ou non autorisé.');
     if ($err) return out(400, ['error' => $err]);
     $nu = (object)['id' => uid(), 'name' => $name, 'role' => $b->role, 'created' => round(microtime(true) * 1000)];
@@ -89,7 +92,7 @@ function route() {
       }
       if (property_exists($b, 'discordId')) {
         $d = trim((string)$b->discordId);
-        $err = did_err($d, $t->id) ?: (($d === '' && empty($t->hash)) ? 'Ce compte n’a pas de mot de passe : garde son ID Discord ou définis-lui un mot de passe.' : '');
+        $err = did_err($d, $t->id) ?: (($d === '' && (empty($t->hash) || !pwd_on())) ? 'Ce compte n’a pas de mot de passe : garde son ID Discord ou définis-lui un mot de passe.' : '');
         if ($err) return out(400, ['error' => $err]);
         if ($d !== '') $t->discordId = $d; else unset($t->discordId);
       }
@@ -101,6 +104,7 @@ function route() {
       $db->users = array_values(array_filter($db->users, fn($x) => $x !== $t)); touch_db(); return out(200, admin_view());
     }
     if ($m === 'POST' && ($seg[2] ?? '') === 'password') {
+      if (!pwd_on()) return out(403, ['error' => 'Connexion uniquement avec Discord : pas de mot de passe.']);
       $err = pwd_err($b->password ?? null); if ($err) return out(400, ['error' => $err]);
       set_pwd($t, $b->password); touch_db(); return out(200, admin_view());
     }

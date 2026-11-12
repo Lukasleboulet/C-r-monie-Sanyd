@@ -406,3 +406,21 @@ html.light .appbar{background:rgba(255,250,241,.95)}html.light .ab-clk{backgroun
 .hero-med{margin-top:10px}.gdl{margin-top:6px;font-size:.78rem}
 html.light .mcard2{background:#fff6e6}
 .mic.rib.sm i{display:none}
+[hidden]{display:none!important}
+/* Paramètres : grades / options / sanctions alignés en colonnes */
+.frm.srow{display:grid;align-items:center;gap:8px;margin-bottom:8px}
+.frm.srow>*{min-width:0;width:auto;margin:0}
+.frm.srow input:not(.col),.frm.srow select,.frm.srow .cs{width:100%;box-sizing:border-box}
+.frm.srow.gr{grid-template-columns:40px 40px minmax(180px,1fr) 52px 44px 92px 90px}
+.frm.srow.ac{grid-template-columns:40px 40px minmax(180px,1fr) 230px 200px 90px}
+.frm.srow.sa{grid-template-columns:40px 40px minmax(180px,1fr) 90px}
+.frm.srow .note{text-align:right;white-space:nowrap}
+.frm.srow .btn.del{justify-self:end}
+fieldset.ro .btn{display:inline-flex;visibility:hidden}
+/* cases à cocher centrées verticalement dans les tableaux (plus de décalage dû à la ligne de texte) */
+.chk{vertical-align:middle}td.ck{line-height:0}
+.cer td{vertical-align:middle}.cer td>.cs,.cer td>input{vertical-align:middle}
+td.ck>.chk{display:flex;justify-content:center;align-items:center}
+.cer td:nth-child(4),.cer td:nth-child(5),.cer td:nth-child(6){text-align:center;white-space:nowrap;min-width:52px}
+.cer .r2 th.h{white-space:nowrap}
+.cer .nm .bdg{white-space:nowrap}

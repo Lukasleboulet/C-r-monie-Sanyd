@@ -75,7 +75,8 @@ const canWrite = u => { const r = roleOf(u); return !!r.admin || r.perms.length 
 const canManage = u => isAdmin(u) || roleOf(u).perms.includes('usersManage');
 const pub = u => ({ id: u.id, name: u.name, role: u.role, discordId: u.discordId || '', dname: u.dname || '', dun: u.dun || '', avatar: u.avatar || null, created: u.created, hasPwd: !!u.hash });
 const authed = req => { const t = readTok(cookies(req).sid); return t ? db.users.find(u => u.id === t.u) || null : null; };
-const flags = () => ({ discord: !!(DC.id && DC.secret), redirect: REDIRECT });
+const PWD = !(DC.id && DC.secret) || !!(C.passwordLogin || process.env.PASSWORD_LOGIN); // identifiant + mot de passe : seulement si Discord n'est pas configuré (ou secours activé)
+const flags = () => ({ discord: !!(DC.id && DC.secret), redirect: REDIRECT, pwd: PWD });
 const payload = u => ({ ...flags(), v: db.v, sv: db.sv, me: pub(u), roles: db.roles, state: canRead(u) ? db.state : undefined, users: canManage(u) ? db.users.map(pub) : undefined });
 const adminView = () => ({ v: db.v, users: db.users.map(pub), roles: db.roles });
 
@@ -117,6 +118,7 @@ async function api(req, res, url, p) {
   let m = req.method; const u = authed(req), seg = p.split('/').filter(Boolean), ip = req.socket.remoteAddress;
   if (url.searchParams.has('_m')) m = url.searchParams.get('_m').toUpperCase();
   if (m === 'GET' && p === '/api/boot') return json(res, 200, u ? payload(u) : { ...flags(), me: null, firstRun: !db.users.length });
+  if (!PWD && m === 'POST' && ['/api/setup', '/api/login'].includes(p)) return json(res, 403, { error: 'Connexion uniquement avec Discord.' });
   if (m === 'POST' && p === '/api/setup') {
     if (db.users.length) return json(res, 403, { error: 'Un compte existe déjà.' });
     const b = await readBody(req), name = String(b.name || '').trim(), err = nameErr(name) || pwdErr(b.password);
@@ -152,6 +154,7 @@ async function api(req, res, url, p) {
     } catch (e) { return json(res, 502, { error: 'Google Sheets injoignable : ' + e.message }); }
   }
   if (m === 'POST' && p === '/api/me/password') {
+    if (!PWD) return json(res, 403, { error: 'Connexion uniquement avec Discord : pas de mot de passe.' });
     const b = await readBody(req);
     if (u.hash && !checkPwd(u, b.old)) return json(res, 400, { error: 'Le mot de passe actuel est incorrect.' });
     const err = pwdErr(b.password); if (err) return json(res, 400, { error: err });
@@ -162,7 +165,8 @@ async function api(req, res, url, p) {
   if (!canManage(u)) return json(res, 403, { error: 'Réservé aux administrateurs' });
   const adm = isAdmin(u), roleOk = id => db.roles.some(r => r.id === id && (adm || !r.admin));
   if (m === 'POST' && p === '/api/users') {
-    const b = await readBody(req), name = String(b.name || '').trim(), pwd = b.password || '', did = String(b.discordId || '').trim();
+    const b = await readBody(req), name = String(b.name || '').trim(), pwd = PWD ? b.password || '' : '', did = String(b.discordId || '').trim();
+    if (!PWD && !did) return json(res, 400, { error: 'Connexion uniquement avec Discord : renseigne l’ID Discord du compte.' });
     const err = nameErr(name) || didErr(did) || (pwd || !did ? pwdErr(pwd) : '') || (roleOk(b.role) ? '' : 'Rôle inconnu ou non autorisé.');
     if (err) return json(res, 400, { error: err });
     const nu = { id: uid(), name, role: b.role, created: Date.now() }; if (did) nu.discordId = did; if (pwd) setPwd(nu, pwd);
@@ -180,7 +184,7 @@ async function api(req, res, url, p) {
         t.role = b.role;
       }
       if ('discordId' in b) {
-        const d = String(b.discordId || '').trim(), err = didErr(d, t.id) || (!d && !t.hash ? 'Ce compte n’a pas de mot de passe : garde son ID Discord ou définis-lui un mot de passe.' : '');
+        const d = String(b.discordId || '').trim(), err = didErr(d, t.id) || (!d && (!t.hash || !PWD) ? 'Ce compte n’a pas de mot de passe : garde son ID Discord ou définis-lui un mot de passe.' : '');
         if (err) return json(res, 400, { error: err });
         if (d) t.discordId = d; else delete t.discordId;
       }
@@ -192,6 +196,7 @@ async function api(req, res, url, p) {
       db.users = db.users.filter(x => x !== t); touch(); return json(res, 200, adminView());
     }
     if (m === 'POST' && seg[3] === 'password') {
+      if (!PWD) return json(res, 403, { error: 'Connexion uniquement avec Discord : pas de mot de passe.' });
       const b = await readBody(req), err = pwdErr(b.password); if (err) return json(res, 400, { error: err });
       setPwd(t, b.password); touch(); return json(res, 200, adminView());
     }

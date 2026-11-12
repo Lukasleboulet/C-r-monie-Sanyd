@@ -7,4 +7,6 @@ return [
   // Portail Discord : https://discord.com/developers/applications → ton application → OAuth2
   'discordClientId' => '',
   'discordClientSecret' => '',
+  // Secours : true = réactive la connexion par identifiant + mot de passe (par défaut : Discord uniquement dès que Discord est configuré).
+  'passwordLogin' => false,
 ];
