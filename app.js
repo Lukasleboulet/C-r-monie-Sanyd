@@ -7,7 +7,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
 const F = m => m == null ? '–' : Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0');
-const BAR_MAX = 300; // barres d’heures : pleines à 5h (300 min)
+const BAR_MAX = 3000; // barres d’heures : pleines à 50h (3000 min)
 const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 function tparse(line, loose) { // "43h30min", "43:30", "43.5" -> minutes
@@ -93,7 +93,8 @@ function vImp() {
   <p class="note">Colle directement ton tableau (colonnes <code>Nom ⇥ Rang ⇥ Part employé ⇥ Heures</code>, l’en-tête et la ligne TOTAL sont ignorés ; la part employé n’est pas utilisée), ou des lignes du type <code>Prénom Nom 43h30min</code>. Les agents sont reconnus par « Prénom Nom ».</p>
   <div class="frm"><select id="iw">${wopts(S.weeks.length - 1)}</select>${can('weekAdd') ? '<button class="btn ghost" data-a="week">+ Nouvelle semaine</button>' : ''}
   <label class="note"><input type="checkbox" id="ic" style="flex:none;min-width:0"> Créer les agents inconnus (avec leur rang)</label>
-  <label class="note"><input type="checkbox" id="ig" style="flex:none;min-width:0"> Mettre à jour les grades depuis la colonne Rang</label></div>
+  <label class="note"><input type="checkbox" id="ig" style="flex:none;min-width:0"> Mettre à jour les grades depuis la colonne Rang</label>
+  ${can('gradeEdit') ? '<label class="note"><input type="checkbox" id="icg" style="flex:none;min-width:0"> Créer les grades inconnus</label>' : ''}</div>
   <textarea id="it" placeholder="Rayan Sef&#9;Patron&#9;0&#9;3h50min&#10;Paul Pinoto&#9;Patron&#9;0&#9;14h26min"></textarea>
   <div class="frm" style="margin-top:8px"><button class="btn gold" data-a="import">Importer</button></div><div id="ir" class="note"></div></section>`;
 }
@@ -221,6 +222,16 @@ function parseLine(line) {
 function doImport() {
   const wi = +$('#iw').value, upG = $('#ig')?.checked; let ok = 0, cr = 0, gch = 0; const unk = [], badG = new Set();
   const findG = g => g ? S.grades.find(x => norm(x) === norm(g)) : null;
+  const newG = [], low = S.grades.at(-1); // grade par défaut des agents créés sans rang connu
+  if ($('#icg')?.checked && can('gradeEdit')) { // créer les rangs inconnus, placés selon l'ordre du tableau collé (trié du plus haut au plus bas)
+    const seq = []; for (const line of $('#it').value.split('\n')) { const L = line.trim() && parseLine(line); if (L && L.grade && !seq.some(x => norm(x) === norm(L.grade))) seq.push(L.grade); }
+    seq.forEach((g, i) => {
+      if (findG(g)) return;
+      const nxt = seq.slice(i + 1).map(findG).find(Boolean), prv = seq.slice(0, i).reverse().map(findG).find(Boolean);
+      const at = nxt ? S.grades.indexOf(nxt) : prv ? S.grades.indexOf(prv) + 1 : S.grades.length;
+      S.grades.splice(at, 0, g); newG.push(g);
+    });
+  }
   for (const line of $('#it').value.split('\n')) {
     if (!line.trim()) continue;
     const L = parseLine(line); if (!L || L.mins == null) continue;
@@ -234,13 +245,13 @@ function doImport() {
     }
     if ($('#ic').checked && L.name) {
       const [pre, ...rest] = L.name.split(' '), w = S.weeks.map(() => null); w[wi] = L.mins;
-      const na = { id: uid(), mat: '-', prenom: pre, nom: rest.join(' '), grade: g || S.grades.at(-1), w }; S.agents.push(na); logGrade(na, null, na.grade, 'création'); cr++;
+      const na = { id: uid(), mat: '-', prenom: pre, nom: rest.join(' '), grade: g || low, w }; S.agents.push(na); logGrade(na, null, na.grade, 'création'); cr++;
     } else unk.push(L.name || line.trim());
   }
   save();
-  $('#ir').innerHTML = `<b>${ok}</b> mis à jour (semaine du ${S.weeks[wi]})${cr ? `, <b>${cr}</b> créé(s)` : ''}${gch ? `, <b>${gch}</b> grade(s) modifié(s)` : ''}.` +
+  $('#ir').innerHTML = `<b>${ok}</b> mis à jour (semaine du ${S.weeks[wi]})${cr ? `, <b>${cr}</b> créé(s)` : ''}${gch ? `, <b>${gch}</b> grade(s) modifié(s)` : ''}.` + (newG.length ? `<br>Grade(s) créé(s) : <b>${newG.map(esc).join(', ')}</b> — vérifie leur place dans Paramètres › Grades.` : '') +
     (unk.length ? `<br>Non reconnus (coche « Créer les agents inconnus » pour les ajouter) : ${unk.map(esc).join(', ')}` : '') +
-    (badG.size ? `<br>Rangs absents de la liste des grades (ignorés${$('#ic').checked ? ` ; agents créés en ${esc(S.grades.at(-1))}` : ''}) : ${[...badG].map(esc).join(', ')} — ajoute-les dans Paramètres › Grades si besoin.` : '');
+    (badG.size ? `<br>Rangs absents de la liste des grades (ignorés${$('#ic').checked ? ` ; agents créés en ${esc(low)}` : ''}) : ${[...badG].map(esc).join(', ')} — ajoute-les dans Paramètres › Grades si besoin.` : '');
 }
 function unlock(a) { // admin : annule l'application d'une décision déjà validée
   const d = (S.ceremonies[S.weeks[cw]] || {})[a.id];
