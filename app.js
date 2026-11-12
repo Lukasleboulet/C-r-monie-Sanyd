@@ -89,10 +89,11 @@ function vHrs() {
 function vImp() {
   if (!can('hoursImport')) return '<section class="panel"><h2>Importer des heures</h2><p class="note">Lecture seule : ton rôle ne permet pas d’importer des heures.</p></section>';
   return `<section class="panel"><h2>Importer des heures</h2>
-  <p class="note">Colle des lignes du type <code>Prénom Nom 43h30min</code>, <code>Prénom Nom ; 43:30</code> ou une ligne copiée depuis la feuille (la dernière durée est utilisée). Les agents sont reconnus par « Prénom Nom ».</p>
+  <p class="note">Colle directement ton tableau (colonnes <code>Nom ⇥ Rang ⇥ Part employé ⇥ Heures</code>, l’en-tête et la ligne TOTAL sont ignorés ; la part employé n’est pas utilisée), ou des lignes du type <code>Prénom Nom 43h30min</code>. Les agents sont reconnus par « Prénom Nom ».</p>
   <div class="frm"><select id="iw">${wopts(S.weeks.length - 1)}</select>${can('weekAdd') ? '<button class="btn ghost" data-a="week">+ Nouvelle semaine</button>' : ''}
-  <label class="note"><input type="checkbox" id="ic" style="flex:none;min-width:0"> Créer les agents inconnus</label></div>
-  <textarea id="it" placeholder="Light Crow 43h30min&#10;Kanan Navarra 56h52min"></textarea>
+  <label class="note"><input type="checkbox" id="ic" style="flex:none;min-width:0"> Créer les agents inconnus (avec leur rang)</label>
+  <label class="note"><input type="checkbox" id="ig" style="flex:none;min-width:0"> Mettre à jour les grades depuis la colonne Rang</label></div>
+  <textarea id="it" placeholder="Rayan Sef&#9;Patron&#9;0&#9;3h50min&#10;Paul Pinoto&#9;Patron&#9;0&#9;14h26min"></textarea>
   <div class="frm" style="margin-top:8px"><button class="btn gold" data-a="import">Importer</button></div><div id="ir" class="note"></div></section>`;
 }
 const INFO = [['casiers', 'Nb Casiers', 'num'], ['sanction', 'Sanction', 'sel'], ['fps', 'Forma PS', 'chk'], ['f1020', 'Forma 10-20', 'chk'], ['fus', 'Fusillade / PPA L (slo)', 'chk'], ['abs', 'Absence', 'chk']];
@@ -201,22 +202,44 @@ async function addWeek() {
   if (!v || !/^\d{1,2}\/\d{1,2}$/.test(v.trim())) return;
   S.weeks.push(v.trim()); S.agents.forEach(a => a.w.push(null)); cw = S.weeks.length - 1; upd();
 }
+// Lecture d'une ligne collée : colonnes (tabulations ou « ; ») « Nom ⇥ Rang ⇥ Part employé ⇥ Heures » (copie d'un tableau),
+// ou texte libre « Prénom Nom 43h30min ». Renvoie { name, grade, mins } ou null (en-tête, ligne TOTAL, ligne sans durée).
+const isDur = c => /^\d+h(\d{1,2})?(min)?$/i.test(c) || /^\d+:\d{2}$/.test(c);
+function parseLine(line) {
+  const cols = line.split(/\t|;/).map(c => c.trim());
+  if (cols.length >= 2) {
+    const name = cols[0].replace(/\s+/g, ' '), di = cols.findLastIndex(c => isDur(c.replace(/\s+/g, '')));
+    if (!name || /^(total|nom|name|agent)$/i.test(norm(name)) || di < 1) return null;
+    const g = cols[1] && !isDur(cols[1]) && !/^\d+([.,]\d+)?$/.test(cols[1]) && cols[1] !== '-' && di > 1 ? cols[1] : '';
+    return { name, grade: g, mins: tparse(cols[di].replace(/\s+/g, ''), true) };
+  }
+  const mins = tparse(line); if (mins == null || /^\s*total\b/i.test(line)) return null;
+  const name = line.replace(/\d+h(\d{1,2})?(min)?/gi, ' ').replace(/\b\d+:\d{2}\b/g, ' ').replace(/(^|\s)\d+([.,]\d+)?(?=\s|$)/g, ' ').replace(/[;\t,]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return { name, grade: '', mins };
+}
 function doImport() {
-  const wi = +$('#iw').value; let ok = 0, cr = 0; const unk = [];
+  const wi = +$('#iw').value, upG = $('#ig')?.checked; let ok = 0, cr = 0, gch = 0; const unk = [], badG = new Set();
+  const findG = g => g ? S.grades.find(x => norm(x) === norm(g)) : null;
   for (const line of $('#it').value.split('\n')) {
     if (!line.trim()) continue;
-    const mins = tparse(line); if (mins == null) continue;
-    const nl = norm(line); let b = null;
-    for (const a of S.agents) { const n = norm(full(a)); if (n && nl.includes(n) && (!b || n.length > norm(full(b)).length)) b = a; }
-    if (b) { b.w[wi] = mins; ok++; continue; }
-    const name = line.replace(/\d+h(\d{1,2})?(min)?/gi, ' ').replace(/\b\d+:\d{2}\b/g, ' ').replace(/(^|\s)\d+([.,]\d+)?(?=\s|$)/g, ' ').replace(/[;\t,]+/g, ' ').replace(/\s+/g, ' ').trim();
-    if ($('#ic').checked && name) {
-      const [pre, ...rest] = name.split(' '), w = S.weeks.map(() => null); w[wi] = mins;
-      { const na = { id: uid(), mat: '-', prenom: pre, nom: rest.join(' '), grade: S.grades.at(-1), w }; S.agents.push(na); logGrade(na, null, na.grade, 'création'); } cr++;
-    } else unk.push(name || line.trim());
+    const L = parseLine(line); if (!L || L.mins == null) continue;
+    const nl = norm(L.name); let b = S.agents.find(a => norm(full(a)) === nl) || null; // nom exact d'abord
+    if (!b) for (const a of S.agents) { const n = norm(full(a)); if (n && nl.includes(n) && (!b || n.length > norm(full(b)).length)) b = a; }
+    const g = findG(L.grade); if (L.grade && !g) badG.add(L.grade);
+    if (b) {
+      b.w[wi] = L.mins; ok++;
+      if (upG && g && g !== b.grade) { logGrade(b, b.grade, g, 'import'); b.grade = g; gch++; }
+      continue;
+    }
+    if ($('#ic').checked && L.name) {
+      const [pre, ...rest] = L.name.split(' '), w = S.weeks.map(() => null); w[wi] = L.mins;
+      const na = { id: uid(), mat: '-', prenom: pre, nom: rest.join(' '), grade: g || S.grades.at(-1), w }; S.agents.push(na); logGrade(na, null, na.grade, 'création'); cr++;
+    } else unk.push(L.name || line.trim());
   }
   save();
-  $('#ir').innerHTML = `<b>${ok}</b> mis à jour (semaine du ${S.weeks[wi]})${cr ? `, <b>${cr}</b> créé(s)` : ''}.` + (unk.length ? `<br>Non reconnus : ${unk.map(esc).join(', ')}` : '');
+  $('#ir').innerHTML = `<b>${ok}</b> mis à jour (semaine du ${S.weeks[wi]})${cr ? `, <b>${cr}</b> créé(s)` : ''}${gch ? `, <b>${gch}</b> grade(s) modifié(s)` : ''}.` +
+    (unk.length ? `<br>Non reconnus (coche « Créer les agents inconnus » pour les ajouter) : ${unk.map(esc).join(', ')}` : '') +
+    (badG.size ? `<br>Rangs absents de la liste des grades (ignorés${$('#ic').checked ? ` ; agents créés en ${esc(S.grades.at(-1))}` : ''}) : ${[...badG].map(esc).join(', ')} — ajoute-les dans Paramètres › Grades si besoin.` : '');
 }
 function unlock(a) { // admin : annule l'application d'une décision déjà validée
   const d = (S.ceremonies[S.weeks[cw]] || {})[a.id];
