@@ -9,7 +9,7 @@ InfinityFree n'exécute **pas Node.js** : `server.js` n'y tourne pas, d'où l'ab
 3. Dans le portail Discord › OAuth2 › Redirects, ajoute : `https://TON-DOMAINE/discord.php` (l'URL exacte est affichée dans Administration › Accès & comptes).
 4. Ouvre le site : le premier compte créé est administrateur. Le dossier `data/` est créé automatiquement (données protégées, non lisibles depuis le navigateur).
 - Active le **SSL gratuit** d'InfinityFree (https) : les cookies de session sont alors sécurisés.
-- Limite InfinityFree : ~50 000 requêtes/jour. La synchro interroge le serveur toutes les 5 s **seulement quand l'onglet est visible** (≈ 720 requêtes/heure par personne connectée).
+- Limite InfinityFree : ~50 000 requêtes/jour (au-delà : site suspendu jusqu'au lendemain). La synchro interroge le serveur toutes les 15 s quand on utilise le site, toutes les 60 s après 5 min sans activité, et pas du tout quand l'onglet est masqué (≈ 240 requêtes/heure au maximum par personne). app.js, style.css et le logo sont gardés en cache par le navigateur.
 - Sauvegarde régulièrement `data/db.php` (ou bouton Sauvegarde).
 
 ## Lancer en local avec Node.js (optionnel)

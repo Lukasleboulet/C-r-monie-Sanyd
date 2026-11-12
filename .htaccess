@@ -16,7 +16,18 @@ Options -Indexes
   <FilesMatch "\.(php|json)$">
     Header set Cache-Control "no-store, no-cache, must-revalidate"
   </FilesMatch>
-  <FilesMatch "\.(js|css|html)$">
+  <FilesMatch "\.html$">
     Header set Cache-Control "no-cache"
   </FilesMatch>
+  # app.js, style.css, logo : gardés en cache (index.php ajoute ?v=date à chaque mise à jour) -> beaucoup moins de requêtes
+  <FilesMatch "\.(js|css|png|jpg|webp|ico)$">
+    Header set Cache-Control "public, max-age=2592000"
+  </FilesMatch>
+</IfModule>
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/png "access plus 30 days"
+  ExpiresByType text/css "access plus 30 days"
+  ExpiresByType application/javascript "access plus 30 days"
+  ExpiresByType text/javascript "access plus 30 days"
 </IfModule>

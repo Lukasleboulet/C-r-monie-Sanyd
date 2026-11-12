@@ -580,6 +580,7 @@ const editing = () => { const a = document.activeElement; return !!(csPop || !$(
 const softRender = () => editing() ? (needRender = true) : render();
 
 function save() { if (!me) return; dirty = true; setSync('busy', 'Enregistrement…'); clearTimeout(saveTimer); saveTimer = setTimeout(flush, 400); }
+let fails = 0; const retryMs = () => Math.min(60000, 4000 * 2 ** Math.min(4, fails++)); // nouvelles tentatives de plus en plus espacées (4 s → 60 s)
 async function flush() {
   if (!me) return;
   if (saving) { saveTimer = setTimeout(flush, 250); return; }
@@ -588,10 +589,10 @@ async function flush() {
   try {
     const r = await api('PUT', '/api/state', { base: SV, state: snap });
     if (r.status === 409) { const R = migrate(r.json.state); S = merge(S0 || R, S, R); S0 = clone(R); SV = r.json.sv; VV = r.json.v; dirty = true; setTimeout(flush, 30); softRender(); }
-    else if (r.ok) { SV = r.json.sv; VV = r.json.v; S0 = snap; setSync(dirty ? 'busy' : 'ok', dirty ? 'Enregistrement…' : 'Synchronisé avec le serveur'); }
+    else if (r.ok) { fails = 0; SV = r.json.sv; VV = r.json.v; S0 = snap; setSync(dirty ? 'busy' : 'ok', dirty ? 'Enregistrement…' : 'Synchronisé avec le serveur'); }
     else if (r.status === 403) { setSync('off', 'Droits insuffisants pour enregistrer'); }
-    else { dirty = true; setSync('off', r.json?.error || 'Enregistrement refusé'); saveTimer = setTimeout(flush, 4000); }
-  } catch (e) { dirty = true; setSync('off', 'Serveur injoignable — nouvelle tentative…'); saveTimer = setTimeout(flush, 4000); }
+    else { dirty = true; setSync('off', r.json?.error || 'Enregistrement refusé'); saveTimer = setTimeout(flush, retryMs()); }
+  } catch (e) { dirty = true; setSync('off', 'Serveur injoignable — nouvelle tentative…'); saveTimer = setTimeout(flush, retryMs()); }
   saving = false;
 }
 function applyPayload(j) {
@@ -1033,6 +1034,10 @@ const tick = () => { const d = new Date(); $('#clk').innerHTML = `<b>${d.toLocal
 tick(); setInterval(tick, 1000);
 render();
 document.addEventListener('focusout', () => { if (needRender) setTimeout(() => { if (needRender && !editing()) { needRender = false; render(); } }, 150); });
-setInterval(sync, 5000); // synchronisation avec le serveur (5 s ; en pause quand l'onglet est masqué)
-document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+// Synchronisation économe (hébergement gratuit : nombre de requêtes limité) :
+// toutes les 15 s quand on utilise le site, toutes les 60 s après 5 min sans activité, rien quand l'onglet est masqué.
+let lastAct = Date.now(), lastSync = 0;
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => addEventListener(ev, () => { const was = Date.now() - lastAct > 3e5; lastAct = Date.now(); if (was) sync(); }, { passive: true }));
+setInterval(() => { if (document.hidden) return; const gap = Date.now() - lastAct > 3e5 ? 60000 : 15000; if (Date.now() - lastSync >= gap) { lastSync = Date.now(); sync(); } }, 5000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - lastSync > 15000) { lastSync = Date.now(); sync(); } });
 load();
