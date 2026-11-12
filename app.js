@@ -294,7 +294,7 @@ function decide(id, patch) {
 document.addEventListener('click', async e => {
   const el = e.target.closest('[data-a]'); if (!el) return;
   const act = el.dataset.a, id = el.dataset.id;
-  if (['radd', 'rdel', 'rall'].includes(act) && !admin) return;
+  if (['radd', 'rdel', 'rall', 'rup', 'rdn'].includes(act) && !admin) return;
   if (['udel', 'uadd', 'upw'].includes(act) && !mgr()) return;
   if (['del', 'arch', 'unarch'].includes(act) && !can('agentDel')) return;
   if (act === 'add' && !can('agentAdd')) return;
@@ -349,6 +349,10 @@ document.addEventListener('click', async e => {
     const n = users.filter(u => u.role === r.id).length;
     if (n) await dlg({ title: 'Rôle utilisé', msg: `${n} compte(s) ont encore ce rôle : change leur rôle avant de le retirer.`, cancel: null, icon: 'warn' });
     else if (await dlg({ title: 'Retirer le rôle', msg: `Retirer le rôle « ${r.name} » ?`, ok: 'Retirer', danger: true }) && await adminCall('PUT', '/api/roles', { roles: clone(roles).filter(x => x.id !== id) })) render();
+  }
+  else if (act === 'rup' || act === 'rdn') { // ordre des rôles (enregistré sur le serveur)
+    const next = clone(roles), i = next.findIndex(x => x.id === id), k = act === 'rup' ? i - 1 : i + 1; if (i < 0 || k < 0 || k >= next.length) return;
+    [next[i], next[k]] = [next[k], next[i]]; if (await adminCall('PUT', '/api/roles', { roles: next })) render();
   }
   else if (act === 'rall') {
     const next = clone(roles), r = next.find(x => x.id === id); if (!r || r.admin) return;
@@ -617,7 +621,7 @@ function rolesPanel() {
   const nUsers = r => users.filter(u => u.role === r.id).length;
   return `<section class="panel"><h2>Rôles et accès</h2><p class="note">Pour chaque rôle : les onglets visibles, puis les actions autorisées. « Gérer comptes » permet de valider les comptes en attente et de gérer les comptes non administrateurs (sans toucher aux rôles). Le panneau « Rôles et accès » reste réservé aux administrateurs.</p>
   <h3 class="sub">Onglets accessibles</h3><div class="wrapt"><table><thead><tr><th>Rôle</th>${T.map(c => `<th style="text-align:center">${c[1]}</th>`).join('')}<th></th></tr></thead><tbody>` +
-    roles.map(r => `<tr><td><input class="cin" style="width:200px" data-a="rname" data-id="${r.id}" value="${esc(r.name)}"><small class="note">${nUsers(r)} compte(s)</small></td>` + T.map(([k]) => box(`data-a="rtab" data-id="${r.id}" data-k="${k}"`, r.admin || (r.tabs || []).includes(k), r.admin)).join('') +
+    roles.map((r, i) => `<tr><td><span class="rmv"><button class="btn ghost" data-a="rup" data-id="${r.id}" ${i ? '' : 'disabled'} title="Monter">▲</button><button class="btn ghost" data-a="rdn" data-id="${r.id}" ${i < roles.length - 1 ? '' : 'disabled'} title="Descendre">▼</button></span><input class="cin" style="width:200px" data-a="rname" data-id="${r.id}" value="${esc(r.name)}"><small class="note">${nUsers(r)} compte(s)</small></td>` + T.map(([k]) => box(`data-a="rtab" data-id="${r.id}" data-k="${k}"`, r.admin || (r.tabs || []).includes(k), r.admin)).join('') +
       `<td>${r.builtin ? '' : `<button class="btn del" data-a="rdel" data-id="${r.id}">Retirer</button>`}</td></tr>`).join('') +
     `</tbody></table></div>
   <h3 class="sub">Permissions (actions)</h3><div class="wrapt"><table class="ptab2"><thead><tr><th>Permission</th>${roles.map(r => `<th class="rc">${esc(r.name)}${r.admin ? '' : `<button class="btn ghost mini-b" data-a="rall" data-id="${r.id}" title="Tout cocher / tout décocher">tout</button>`}</th>`).join('')}</tr></thead><tbody>` +

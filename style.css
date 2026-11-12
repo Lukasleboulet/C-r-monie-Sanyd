@@ -430,3 +430,4 @@ td.ck>.chk{display:flex;justify-content:center;align-items:center}
 .ptab2 td.pl{font-weight:500}
 .ptab2 tr.pgr td{padding:9px 16px 6px;background:rgba(240,138,60,.07);color:var(--acc2);font:700 .66rem Inter,sans-serif;letter-spacing:.12em;text-transform:uppercase}
 html.light .ptab2 tr.pgr td{background:rgba(224,115,31,.08);color:var(--t)}
+.rmv{display:inline-flex;gap:4px;margin-right:8px;vertical-align:middle}.rmv .btn{padding:4px 8px;font-size:.7rem}
