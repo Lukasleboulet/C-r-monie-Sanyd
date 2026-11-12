@@ -325,3 +325,7 @@ html.light .chip,html.light .segs{background:#fff6e6}html.light .ch-v{fill:#3a28
 td.acts{display:flex;gap:8px;justify-content:flex-end}
 tr.arch td{color:var(--mute)}tr.arch .bdg{opacity:.7}
 .ai .tag{flex:none;font-size:.62rem}
+/* une seule zone de défilement (la page) et aucune barre de défilement visible */
+.wrapt{max-height:none;overflow-y:visible}
+.main,.side,.wrapt,.alist,.cs-pop{scrollbar-width:none;-ms-overflow-style:none}
+.main::-webkit-scrollbar,.side::-webkit-scrollbar,.wrapt::-webkit-scrollbar,.alist::-webkit-scrollbar,.cs-pop::-webkit-scrollbar{display:none}

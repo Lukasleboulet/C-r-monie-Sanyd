@@ -84,7 +84,7 @@ function listHtml() {
 function vEff() {
   return (can('agentAdd') ? `<section class="panel"><h2>Créer un agent</h2><div class="frm">
     <input id="n-mat" placeholder="Matricule"><input id="n-pre" placeholder="Prénom"><input id="n-nom" placeholder="Nom">
-    <select id="n-gr">${gopts(S.grades.at(-1))}</select><button class="btn gold" data-a="add">Ajouter</button></div></section>` : '') + `
+    <select id="n-gr">${gopts([...S.grades].reverse().find(g => !ignR(g)) || S.grades.at(-1))}</select><button class="btn gold" data-a="add">Ajouter</button></div></section>` : '') + `
     <div class="frm"><input id="q" placeholder="Rechercher (nom, matricule)…" value="${esc(flt.q)}">
     <select id="fg"><option value="">Tous les grades</option>${gopts(flt.g)}</select><select id="ew">${wopts(flt.w ?? S.weeks.length - 1)}</select><span class="note">${actv().length} agents</span>${S.agents.some(a => a.arch) || flt.arch ? `<button class="btn ghost${flt.arch ? ' on' : ''}" data-a="sharch">${flt.arch ? '← Effectif en service' : `Archivés (${S.agents.filter(a => a.arch).length})`}</button>` : ''}</div>
     <div id="list">${listHtml()}</div>`;
@@ -684,7 +684,7 @@ function staDetail(a) {
   <section class="panel"><div class="ph"><h2>Heures par semaine</h2><span class="note">${S.weeks[f]} → ${S.weeks[t]}</span></div><div class="chartw">${chartSvg(a, f, t, s.n ? s.avg : null)}</div></section>
   <div class="s2">
   <section class="panel"><div class="ph"><h2>Historique des grades</h2><span class="note">actuel : ${badge(a.grade)}</span></div>${hist.length ? `<div class="tl">` + hist.map(h => `<div class="tli${h.st === 'prevu' ? ' pv' : ''}"><i></i><div><b>${h.from ? `${badge(h.from)} <span class="note">→</span> ${badge(h.to)}` : badge(h.to)}</b><span>${esc(h.src)}${h.st === 'prevu' ? ' · décision non appliquée' : ''} · sem. du ${S.weeks[h.w] ?? '?'}${h.t ? ' · ' + new Date(h.t).toLocaleDateString('fr-FR') : ''}</span>${h.why ? `<em>${esc(h.why)}</em>` : ''}</div></div>`).join('') + `</div>` : '<p class="note">Aucun changement de grade enregistré.</p>'}</section>
-  <section class="panel"><div class="ph"><h2>Détail par semaine</h2></div><div class="wrapt" style="max-height:360px"><table><thead><tr><th>Semaine</th><th>Heures</th><th>Écart moy.</th><th></th></tr></thead><tbody>` +
+  <section class="panel"><div class="ph"><h2>Détail par semaine</h2></div><div class="wrapt"><table><thead><tr><th>Semaine</th><th>Heures</th><th>Écart moy.</th><th></th></tr></thead><tbody>` +
     wk.map(i => { const v = a.w[i], d = v == null || !s.n ? null : v - s.avg; return `<tr><td>${S.weeks[i]}</td><td class="hcell">${F(v)}</td><td class="hcell ${d == null ? '' : d >= 0 ? 'pos' : 'neg'}">${d == null ? '—' : Fd(d)}</td><td><span class="mini"><i style="width:${Math.min(100, (v || 0) / BAR_MAX * 100)}%"></i></span></td></tr>`; }).join('') + `</tbody></table></div></section>
   </div>
   <section class="panel"><div class="ph"><h2>Cérémonies & suivi</h2><span class="note">${cer.length} cérémonie(s) · ${nS} sanction(s) · ${nA} absence(s)</span></div>${cer.length ? `<div class="wrapt"><table><thead><tr><th>Semaine</th><th>Décision</th><th>Sanction</th><th>Casiers</th><th>Forma PS</th><th>Forma 10-20</th><th>Fusillade</th><th>Absence</th><th>Explication</th><th>Notes</th></tr></thead><tbody>` +
