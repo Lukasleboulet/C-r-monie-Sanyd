@@ -1,0 +1,12 @@
+{
+  "name": "samp-sandy-shore",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Suivi des heures et cérémonies — SAMP, district de Sandy Shore",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

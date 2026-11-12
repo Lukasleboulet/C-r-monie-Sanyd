@@ -1,0 +1,231 @@
+#!/usr/bin/env node
+// SAMP · District de Sandy Shore — serveur (Node.js ≥ 18, aucune dépendance à installer).
+// Rôle : héberger le site + stocker comptes, rôles et données PARTAGÉS entre tous les ordinateurs,
+// gérer les sessions et la connexion Discord (OAuth2, secret gardé côté serveur).
+// Lancer : node server.js   →   http://localhost:3000
+'use strict';
+const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
+
+const ROOT = __dirname, DATA = process.env.DATA_DIR || path.join(ROOT, 'data'), DBF = path.join(DATA, 'db.json');
+fs.mkdirSync(DATA, { recursive: true });
+let C = {}; try { C = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')); } catch (e) {}
+const PORT = +(process.env.PORT || C.port || 3000);
+const BASE = (process.env.BASE_URL || C.baseUrl || `http://localhost:${PORT}`).replace(/\/$/, '');
+const DC = { id: process.env.DISCORD_CLIENT_ID || C.discordClientId || '', secret: process.env.DISCORD_CLIENT_SECRET || C.discordClientSecret || '' };
+const REDIRECT = BASE + '/auth/discord/callback', SECURE = BASE.startsWith('https');
+
+// ---------- secret de session + base de données (fichiers JSON dans ./data) ----------
+const SKF = path.join(DATA, 'secret.key'); let SECRET;
+try { SECRET = fs.readFileSync(SKF, 'utf8'); } catch (e) { SECRET = crypto.randomBytes(32).toString('hex'); fs.writeFileSync(SKF, SECRET, { mode: 0o600 }); }
+
+const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'set'];
+const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'cerEdit', 'cerValidate', 'cerEditDone', 'dataBackup', 'dataReset'];
+const BUILTIN = ['admin', 'user', 'pending'];
+const defaultRoles = () => [
+  { id: 'admin', name: 'Administrateur', admin: true, builtin: true, tabs: TABS.slice(0, 5), perms: [...PERMS] },
+  { id: 'user', name: 'Utilisateur', builtin: true, tabs: TABS.slice(0, 5), perms: ['agentAdd', 'hoursEdit', 'cerEdit', 'cerValidate', 'dataBackup'] },
+  { id: 'pending', name: 'En attente', builtin: true, tabs: [], perms: [] }];
+let db = { v: 1, sv: 0, state: null, users: [], roles: defaultRoles() };
+try { db = { ...db, ...JSON.parse(fs.readFileSync(DBF, 'utf8')) }; } catch (e) {}
+defaultRoles().forEach((d, i) => { if (!db.roles.some(r => r.id === d.id)) db.roles.splice(Math.min(i, db.roles.length), 0, d); });
+const persist = () => { const t = DBF + '.tmp'; fs.writeFileSync(t, JSON.stringify(db)); fs.renameSync(t, DBF); };
+const touch = () => { db.v++; persist(); };
+
+// ---------- utilitaires ----------
+const uid = () => crypto.randomBytes(6).toString('hex');
+const b64 = s => Buffer.from(s).toString('base64url');
+const sign = s => crypto.createHmac('sha256', SECRET).update(s).digest('base64url');
+const mkTok = (id, ttl) => { const p = b64(JSON.stringify({ u: id, e: Date.now() + ttl })); return p + '.' + sign(p); };
+function readTok(t) {
+  if (!t || !t.includes('.')) return null;
+  const [p, s] = t.split('.'), e = sign(p);
+  if (s.length !== e.length || !crypto.timingSafeEqual(Buffer.from(s), Buffer.from(e))) return null;
+  try { const o = JSON.parse(Buffer.from(p, 'base64url').toString()); return o.e > Date.now() ? o : null; } catch (x) { return null; }
+}
+const cookies = req => Object.fromEntries((req.headers.cookie || '').split(';').map(c => c.trim()).filter(Boolean).map(c => { const i = c.indexOf('='); return [c.slice(0, i), decodeURIComponent(c.slice(i + 1))]; }));
+const setCookie = (res, name, val, maxAge) => {
+  const c = `${name}=${encodeURIComponent(val)}; Path=/; HttpOnly; SameSite=Lax${maxAge ? `; Max-Age=${maxAge}` : ''}${SECURE ? '; Secure' : ''}`;
+  res.setHeader('Set-Cookie', [...(res.getHeader('Set-Cookie') || []), c]);
+};
+const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+const readBody = req => new Promise((ok, no) => {
+  let b = ''; req.on('data', c => { b += c; if (b.length > 15e6) { req.destroy(); no(new Error('trop gros')); } });
+  req.on('end', () => { try { ok(b ? JSON.parse(b) : {}); } catch (e) { no(e); } });
+});
+const setPwd = (u, pwd) => { u.salt = crypto.randomBytes(16).toString('hex'); u.hash = crypto.scryptSync(pwd, u.salt, 64).toString('hex'); };
+const checkPwd = (u, pwd) => { if (!u.hash) return false; const h = crypto.scryptSync(String(pwd), u.salt, 64); return crypto.timingSafeEqual(h, Buffer.from(u.hash, 'hex')); };
+
+const roleOf = u => db.roles.find(r => r.id === u.role) || db.roles.find(r => r.id === 'user');
+const isAdmin = u => !!roleOf(u).admin;
+const canRead = u => { const r = roleOf(u); return !!r.admin || r.tabs.length > 0 || r.perms.length > 0; };
+const canWrite = u => { const r = roleOf(u); return !!r.admin || r.perms.length > 0 || r.tabs.some(t => ['eff', 'hrs', 'imp', 'cer', 'set'].includes(t)); };
+const pub = u => ({ id: u.id, name: u.name, role: u.role, discordId: u.discordId || '', dname: u.dname || '', dun: u.dun || '', avatar: u.avatar || null, created: u.created, hasPwd: !!u.hash });
+const authed = req => { const t = readTok(cookies(req).sid); return t ? db.users.find(u => u.id === t.u) || null : null; };
+const flags = () => ({ discord: !!(DC.id && DC.secret), redirect: REDIRECT });
+const payload = u => ({ ...flags(), v: db.v, sv: db.sv, me: pub(u), roles: db.roles, state: canRead(u) ? db.state : undefined, users: isAdmin(u) ? db.users.map(pub) : undefined });
+const adminView = () => ({ v: db.v, users: db.users.map(pub), roles: db.roles });
+
+const nameErr = n => typeof n !== 'string' || n.length < 2 || n.length > 32 ? 'L’identifiant doit faire entre 2 et 32 caractères.' : /\s/.test(n) ? 'Pas d’espace dans l’identifiant.' : db.users.some(u => u.name.toLowerCase() === n.toLowerCase()) ? 'Cet identifiant existe déjà.' : '';
+const pwdErr = p => typeof p !== 'string' || p.length < 4 ? 'Le mot de passe doit faire au moins 4 caractères.' : '';
+const didErr = (d, except) => d && !/^\d{15,22}$/.test(d) ? 'ID Discord invalide (un nombre de 17 à 19 chiffres).' : d && db.users.some(u => u.id !== except && u.discordId === d) ? 'Cet ID Discord est déjà associé à un compte.' : '';
+
+function cleanRoles(inp) {
+  if (!Array.isArray(inp) || inp.length > 60) return null;
+  const out = [], names = new Set();
+  for (const r of inp) {
+    if (!r || typeof r.id !== 'string' || !/^[a-z0-9]{3,24}$/.test(r.id) || typeof r.name !== 'string') return null;
+    const name = r.name.trim().slice(0, 40); if (!name || names.has(name.toLowerCase())) return null; names.add(name.toLowerCase());
+    const adm = r.id === 'admin';
+    out.push({ id: r.id, name, ...(adm ? { admin: true } : {}), builtin: BUILTIN.includes(r.id),
+      tabs: adm ? TABS.slice(0, 5) : (Array.isArray(r.tabs) ? [...new Set(r.tabs.filter(t => TABS.includes(t)))] : []),
+      perms: adm ? [...PERMS] : (Array.isArray(r.perms) ? [...new Set(r.perms.filter(p => PERMS.includes(p)))] : []) });
+  }
+  if (!BUILTIN.every(id => out.some(r => r.id === id))) return null;
+  if (!db.users.every(u => out.some(r => r.id === u.role))) return null;
+  return out;
+}
+
+// ---------- connexions : limitation des essais ----------
+const fails = new Map();
+const tooMany = ip => { const f = fails.get(ip); return f && f.until > Date.now(); };
+const fail = ip => { const f = fails.get(ip) || { n: 0, until: 0 }; if (++f.n >= 5) { f.until = Date.now() + 30000; f.n = 0; } fails.set(ip, f); };
+const login = (res, u, remember) => setCookie(res, 'sid', mkTok(u.id, 30 * 864e5), remember ? 30 * 86400 : 0);
+
+// ---------- API ----------
+async function api(req, res, url, p) {
+  const m = req.method, u = authed(req), seg = p.split('/').filter(Boolean), ip = req.socket.remoteAddress;
+  if (m === 'GET' && p === '/api/boot') return json(res, 200, u ? payload(u) : { ...flags(), me: null, firstRun: !db.users.length });
+  if (m === 'POST' && p === '/api/setup') {
+    if (db.users.length) return json(res, 403, { error: 'Un compte existe déjà.' });
+    const b = await readBody(req), name = String(b.name || '').trim(), err = nameErr(name) || pwdErr(b.password);
+    if (err) return json(res, 400, { error: err });
+    const nu = { id: uid(), name, role: 'admin', created: Date.now() }; setPwd(nu, b.password); db.users.push(nu); touch(); login(res, nu, b.remember);
+    return json(res, 200, payload(nu));
+  }
+  if (m === 'POST' && p === '/api/login') {
+    if (tooMany(ip)) return json(res, 429, { error: 'Trop d’essais : réessaie dans quelques secondes.' });
+    const b = await readBody(req), t = db.users.find(x => x.name.toLowerCase() === String(b.name || '').trim().toLowerCase());
+    if (!t || !checkPwd(t, b.password)) { fail(ip); return json(res, 401, { error: 'Identifiant ou mot de passe incorrect' }); }
+    fails.delete(ip); login(res, t, b.remember); return json(res, 200, payload(t));
+  }
+  if (m === 'POST' && p === '/api/logout') { setCookie(res, 'sid', '', -1); return json(res, 200, { ok: true }); }
+  if (!u) return json(res, 401, { error: 'Non connecté' });
+
+  if (m === 'GET' && p === '/api/sync') return json(res, 200, String(db.v) === url.searchParams.get('v') ? { same: true, v: db.v } : payload(u));
+  if (m === 'PUT' && p === '/api/state') {
+    if (!canWrite(u)) return json(res, 403, { error: 'Droits insuffisants' });
+    const b = await readBody(req);
+    if (!b.state || !Array.isArray(b.state.agents) || !Array.isArray(b.state.weeks)) return json(res, 400, { error: 'Données invalides' });
+    if (b.base !== db.sv) return json(res, 409, { state: db.state, sv: db.sv, v: db.v });
+    db.state = b.state; db.sv++; touch(); return json(res, 200, { sv: db.sv, v: db.v });
+  }
+  if (m === 'POST' && p === '/api/me/password') {
+    const b = await readBody(req);
+    if (u.hash && !checkPwd(u, b.old)) return json(res, 400, { error: 'Le mot de passe actuel est incorrect.' });
+    const err = pwdErr(b.password); if (err) return json(res, 400, { error: err });
+    setPwd(u, b.password); touch(); return json(res, 200, { ok: true });
+  }
+
+  // ----- réservé aux administrateurs -----
+  if (!isAdmin(u)) return json(res, 403, { error: 'Réservé aux administrateurs' });
+  if (m === 'POST' && p === '/api/users') {
+    const b = await readBody(req), name = String(b.name || '').trim(), pwd = b.password || '', did = String(b.discordId || '').trim();
+    const err = nameErr(name) || didErr(did) || (pwd || !did ? pwdErr(pwd) : '') || (db.roles.some(r => r.id === b.role) ? '' : 'Rôle inconnu.');
+    if (err) return json(res, 400, { error: err });
+    const nu = { id: uid(), name, role: b.role, created: Date.now() }; if (did) nu.discordId = did; if (pwd) setPwd(nu, pwd);
+    db.users.push(nu); touch(); return json(res, 200, adminView());
+  }
+  if (seg[1] === 'users' && seg[2]) {
+    const t = db.users.find(x => x.id === seg[2]); if (!t) return json(res, 404, { error: 'Compte introuvable' });
+    const admins = () => db.users.filter(isAdmin).length;
+    if (m === 'PATCH' && seg.length === 3) {
+      const b = await readBody(req);
+      if ('role' in b) {
+        const r = db.roles.find(x => x.id === b.role); if (!r) return json(res, 400, { error: 'Rôle inconnu.' });
+        if (isAdmin(t) && !r.admin && admins() < 2) return json(res, 400, { error: 'Il doit rester au moins un administrateur.' });
+        t.role = b.role;
+      }
+      if ('discordId' in b) {
+        const d = String(b.discordId || '').trim(), err = didErr(d, t.id) || (!d && !t.hash ? 'Ce compte n’a pas de mot de passe : garde son ID Discord ou définis-lui un mot de passe.' : '');
+        if (err) return json(res, 400, { error: err });
+        if (d) t.discordId = d; else delete t.discordId;
+      }
+      touch(); return json(res, 200, adminView());
+    }
+    if (m === 'DELETE' && seg.length === 3) {
+      if (t.id === u.id) return json(res, 400, { error: 'Tu ne peux pas supprimer ton propre compte.' });
+      if (isAdmin(t) && admins() < 2) return json(res, 400, { error: 'Il doit rester au moins un administrateur.' });
+      db.users = db.users.filter(x => x !== t); touch(); return json(res, 200, adminView());
+    }
+    if (m === 'POST' && seg[3] === 'password') {
+      const b = await readBody(req), err = pwdErr(b.password); if (err) return json(res, 400, { error: err });
+      setPwd(t, b.password); touch(); return json(res, 200, adminView());
+    }
+  }
+  if (m === 'PUT' && p === '/api/roles') {
+    const b = await readBody(req), r = cleanRoles(b.roles); if (!r) return json(res, 400, { error: 'Rôles invalides (nom en double, rôle intégré manquant ou rôle encore utilisé).' });
+    db.roles = r; touch(); return json(res, 200, adminView());
+  }
+  return json(res, 404, { error: 'Introuvable' });
+}
+
+// ---------- connexion Discord (OAuth2, flux « code » : le secret reste ici) ----------
+function discordStart(req, res) {
+  const go = loc => { res.writeHead(302, { Location: loc }); res.end(); };
+  if (!DC.id || !DC.secret) return go('/?dc=conf');
+  const st = crypto.randomBytes(16).toString('hex'); setCookie(res, 'dst', st, 600);
+  go('https://discord.com/oauth2/authorize?' + new URLSearchParams({ client_id: DC.id, response_type: 'code', scope: 'identify', redirect_uri: REDIRECT, state: st }));
+}
+function upsertDiscord(pf) {
+  let u = db.users.find(x => x.discordId === pf.id);
+  if (!u) {
+    let name = String(pf.global_name || pf.username || 'Discord').replace(/\s+/g, '_').slice(0, 28); if (name.length < 2) name = 'discord_' + pf.id.slice(-4);
+    if (db.users.some(x => x.name.toLowerCase() === name.toLowerCase())) name += '#' + pf.id.slice(-4);
+    u = { id: uid(), name, role: db.users.length ? 'pending' : 'admin', discordId: pf.id, created: Date.now() }; db.users.push(u);
+  }
+  u.dname = pf.global_name || pf.username || ''; u.dun = pf.username || ''; u.avatar = pf.avatar || null; touch(); return u;
+}
+async function discordCb(req, res, url) {
+  const back = c => { res.writeHead(302, { Location: '/?dc=' + c }); res.end(); };
+  const st = url.searchParams.get('state'), code = url.searchParams.get('code'), ck = cookies(req).dst; setCookie(res, 'dst', '', -1);
+  if (!code) return back('denied');
+  if (!st || st !== ck) return back('state');
+  try {
+    const tr = await fetch('https://discord.com/api/v10/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: DC.id, client_secret: DC.secret, grant_type: 'authorization_code', code, redirect_uri: REDIRECT }) });
+    if (!tr.ok) return back('error');
+    const tok = await tr.json(), pr = await fetch('https://discord.com/api/v10/users/@me', { headers: { Authorization: `${tok.token_type} ${tok.access_token}` } });
+    if (!pr.ok) return back('error');
+    const u = upsertDiscord(await pr.json()); login(res, u, true); return back('ok');
+  } catch (e) { console.error('Discord :', e.message); return back('error'); }
+}
+
+// ---------- fichiers du site ----------
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webp': 'image/webp' };
+function serveStatic(req, res, p) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
+  let rel = decodeURIComponent(p); if (rel === '/') rel = '/index.html';
+  const file = path.normalize(path.join(ROOT, rel));
+  const blocked = !file.startsWith(ROOT + path.sep) || /(^|[\\/])(data|node_modules|\.[^\\/]*)([\\/]|$)/.test(path.relative(ROOT, file)) || ['server.js', 'config.json', 'package.json'].includes(path.basename(file)) || !MIME[path.extname(file).toLowerCase()];
+  if (blocked) { res.writeHead(404); return res.end('Introuvable'); }
+  fs.readFile(file, (e, buf) => {
+    if (e) { res.writeHead(404); return res.end('Introuvable'); }
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()], 'Cache-Control': 'no-cache' }); res.end(req.method === 'HEAD' ? undefined : buf);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url, BASE), p = url.pathname;
+    if (p.startsWith('/api/')) return await api(req, res, url, p);
+    if (p === '/auth/discord') return discordStart(req, res);
+    if (p === '/auth/discord/callback') return await discordCb(req, res, url);
+    return serveStatic(req, res, p);
+  } catch (e) { console.error(e); if (!res.headersSent) json(res, 500, { error: 'Erreur serveur' }); }
+});
+module.exports = { server, db: () => db, start: (port = PORT) => new Promise(ok => server.listen(port, ok)) };
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`\n  SAMP · District de Sandy Shore\n  Site        : ${BASE}\n  Données     : ${DATA}\n  Discord     : ${DC.id && DC.secret ? 'configuré' : 'non configuré (voir LISEZ-MOI)'}\n  Redirection : ${REDIRECT}\n`);
+  });
+}
