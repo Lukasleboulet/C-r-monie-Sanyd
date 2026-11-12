@@ -2,6 +2,16 @@
 
 Site + **serveur** : les comptes, les rôles et les données sont stockés sur le serveur et **partagés en direct** entre tous les ordinateurs (synchronisation toutes les 4 secondes, avec fusion des modifications simultanées).
 
+## Héberger sur ton PC avec Cloudflare Tunnel (Windows) — gratuit
+1. Télécharge le projet : https://github.com/Lukasleboulet/c-r-monie-sanyd/archive/refs/heads/main.zip, puis dézippe-le (ex. `Documents\SandyShore`).
+2. Double-clique **`INSTALLER.bat`** (installe Node.js et cloudflared), puis **redémarre le PC**.
+3. Ouvre **`config.json`** avec le Bloc-notes et colle ton **Client ID** et ta **clé secrète** Discord (laisse `baseUrl` vide).
+4. Double-clique **`DEMARRER.bat`** : une adresse `https://xxxx.trycloudflare.com` s'affiche. C'est l'adresse du site.
+5. Portail Discord › OAuth2 › Redirects : ajoute `https://xxxx.trycloudflare.com/discord.php` (affichée aussi dans la fenêtre du serveur).
+- Garde les deux fenêtres ouvertes et le PC allumé : sinon le site est coupé.
+- ⚠️ Sans nom de domaine, **l'adresse change à chaque lancement de DEMARRER.bat** : il faut alors la redonner aux collègues et mettre à jour la redirection Discord. Pour une adresse fixe : un nom de domaine branché sur Cloudflare (tunnel nommé).
+- Reprendre les données d'InfinityFree : copie `data/db.php` dans le dossier `data/` du projet avant le premier lancement (importé automatiquement).
+
 ## Héberger sur InfinityFree (ou tout hébergement PHP) — RECOMMANDÉ
 InfinityFree n'exécute **pas Node.js** : `server.js` n'y tourne pas, d'où l'absence de synchronisation. Le site contient donc un serveur **PHP** équivalent (`api.php`, `discord.php`, `lib.php`).
 1. Envoie **tout le contenu du dossier** dans `htdocs/` (FTP ou gestionnaire de fichiers), y compris `.htaccess`.

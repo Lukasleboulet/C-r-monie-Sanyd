@@ -10,9 +10,10 @@ const ROOT = __dirname, DATA = process.env.DATA_DIR || path.join(ROOT, 'data'), 
 fs.mkdirSync(DATA, { recursive: true });
 let C = {}; try { C = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')); } catch (e) {}
 const PORT = +(process.env.PORT || C.port || 3000);
-const BASE = (process.env.BASE_URL || C.baseUrl || `http://localhost:${PORT}`).replace(/\/$/, '');
+const FIXED = (process.env.BASE_URL || C.baseUrl || '').replace(/\/$/, ''); // vide = adresse détectée à chaque requête (tunnel Cloudflare, réseau local…)
+let BASE = FIXED || `http://localhost:${PORT}`;
 const DC = { id: process.env.DISCORD_CLIENT_ID || C.discordClientId || '', secret: process.env.DISCORD_CLIENT_SECRET || C.discordClientSecret || '' };
-const REDIRECT = BASE + '/discord.php', SECURE = BASE.startsWith('https');
+let REDIRECT = BASE + '/discord.php', SECURE = BASE.startsWith('https');
 
 // ---------- secret de session + base de données (fichiers JSON dans ./data) ----------
 const SKF = path.join(DATA, 'secret.key'); let SECRET;
@@ -26,7 +27,10 @@ const defaultRoles = () => [
   { id: 'user', name: 'Utilisateur', builtin: true, tabs: TABS.slice(0, 6), perms: ['agentAdd', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'dataBackup'] },
   { id: 'pending', name: 'En attente', builtin: true, tabs: [], perms: [] }];
 let db = { v: 1, sv: 0, state: null, users: [], roles: defaultRoles() };
-try { db = { ...db, ...JSON.parse(fs.readFileSync(DBF, 'utf8')) }; } catch (e) {}
+try { db = { ...db, ...JSON.parse(fs.readFileSync(DBF, 'utf8')) }; }
+catch (e) { // reprise d'une base venant de l'hébergement PHP (data/db.php)
+  try { const t = fs.readFileSync(path.join(DATA, 'db.php'), 'utf8'), i = t.indexOf('?>'); db = { ...db, ...JSON.parse(i >= 0 ? t.slice(i + 2) : t) }; console.log('  Base importée depuis data/db.php'); } catch (x) {}
+}
 defaultRoles().forEach((d, i) => { if (!db.roles.some(r => r.id === d.id)) db.roles.splice(Math.min(i, db.roles.length), 0, d); });
 if ((db.pv || 1) < 2) { // nouvelles permissions : on les accorde aux rôles qui avaient déjà l'accès équivalent
   db.roles.forEach(r => { if (r.admin) { r.perms = [...PERMS]; return; } r.perms = r.perms || [];
@@ -256,6 +260,10 @@ function serveStatic(req, res, p) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    if (!FIXED && req.headers.host) { // adresse publique vue par le visiteur (ex. https://xxxx.trycloudflare.com)
+      const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() || 'http', host = String(req.headers['x-forwarded-host'] || req.headers.host).split(',')[0].trim();
+      if (/^[\w.-]+(:\d+)?$/.test(host)) { const nb = `${proto === 'https' ? 'https' : 'http'}://${host}`; if (nb !== BASE && !/localhost|127\.0\.0\.1/.test(host)) console.log(`\n  Adresse publique : ${nb}\n  → URL de redirection à mettre dans le portail Discord : ${nb}/discord.php\n`); BASE = nb; REDIRECT = BASE + '/discord.php'; SECURE = BASE.startsWith('https'); }
+    }
     const url = new URL(req.url, BASE), p = url.pathname;
     if (p === '/api.php') return await api(req, res, url, '/api/' + (url.searchParams.get('r') || '').replace(/^\/+/, ''));
     if (p === '/discord.php') return url.searchParams.has('code') || url.searchParams.has('error') ? await discordCb(req, res, url) : discordStart(req, res);
@@ -268,6 +276,6 @@ const server = http.createServer(async (req, res) => {
 module.exports = { server, db: () => db, start: (port = PORT) => new Promise(ok => server.listen(port, ok)) };
 if (require.main === module) {
   server.listen(PORT, () => {
-    console.log(`\n  SAMP · District de Sandy Shore\n  Site        : ${BASE}\n  Données     : ${DATA}\n  Discord     : ${DC.id && DC.secret ? 'configuré' : 'non configuré (voir LISEZ-MOI)'}\n  Redirection : ${REDIRECT}\n`);
+    console.log(`\n  SAMP · District de Sandy Shore\n  Site local  : http://localhost:${PORT}\n  Adresse     : ${FIXED || 'détectée automatiquement (tunnel Cloudflare, réseau local…)'}\n  Données     : ${DATA}\n  Discord     : ${DC.id && DC.secret ? 'configuré' : 'non configuré (renseigne config.json)'}\n`);
   });
 }
