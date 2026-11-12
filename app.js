@@ -486,7 +486,7 @@ async function sync() { // toutes les 4 s : récupère les changements des autre
     applyPayload(r.json); softRender();
   } catch (e) { setSync('off', 'Serveur injoignable — nouvelle tentative…'); }
 }
-{ const q = new URLSearchParams(location.search).get('dc'); if (q) { history.replaceState(null, '', location.pathname); dcMsg = { denied: 'Connexion Discord annulée ou refusée.', state: 'Connexion Discord invalide : réessaie.', error: 'Connexion Discord impossible : réessaie.', conf: 'Discord n’est pas configuré sur le serveur (voir LISEZ-MOI).' }[q] || ''; } }
+{ const Q = new URLSearchParams(location.search), q = Q.get('dc'), why = Q.get('why'); if (q) { history.replaceState(null, '', location.pathname); dcMsg = { denied: 'Connexion Discord annulée ou refusée.', state: 'Connexion Discord invalide : réessaie.', error: 'Connexion Discord impossible : réessaie.', conf: 'Discord n’est pas configuré sur le serveur (voir LISEZ-MOI).' }[q] || ''; if (dcMsg && why) dcMsg += ' (' + why + ')'; } }
 async function load() {
   let j; try { j = (await api('GET', '/api/boot')).json; } catch (e) { j = null; }
   if (!j) { setSync('off', 'Serveur injoignable'); firstRun = false; showLogin(); $('#le').textContent = 'Serveur injoignable : vérifie que api.php est bien en ligne (hébergement PHP) ou lance « node server.js ».'; return; }

@@ -5,7 +5,12 @@
 require __DIR__ . '/lib.php';
 header('Cache-Control: no-store');
 function go($loc) { header('Location: ' . $loc, true, 302); exit; }
-function back($c) { go('./?dc=' . $c); }
+function back($c, $why = '') { go('./?dc=' . $c . ($why !== '' ? '&why=' . rawurlencode(substr($why, 0, 160)) : '')); }
+function why($step, $c, $r) { // résumé lisible de la réponse de Discord (JSON d'erreur, ou page Cloudflare si l'IP de l'hébergeur est bloquée)
+  $j = json_decode($r); $d = $j ? trim(($j->error ?? '') . ' ' . ($j->error_description ?? $j->message ?? '')) : '';
+  if (!$d) $d = stripos($r, 'cloudflare') !== false ? 'bloqué par Cloudflare (IP de l’hébergeur)' : trim(substr(strip_tags($r), 0, 80));
+  error_log("Discord $step $c : $r"); return "$step HTTP $c : $d";
+}
 
 if (!discord_on()) back('conf');
 if (!isset($_GET['code']) && !isset($_GET['error'])) {
@@ -18,11 +23,11 @@ if (!$st || !hash_equals($ck, $st)) back('state');
 try {
   [$c, $r] = http_req('https://discord.com/api/v10/oauth2/token', 'POST', ['Content-Type: application/x-www-form-urlencoded'],
     http_build_query(['client_id' => $CONFIG['discordClientId'], 'client_secret' => $CONFIG['discordClientSecret'], 'grant_type' => 'authorization_code', 'code' => $code, 'redirect_uri' => redirect_uri()]));
-  if ($c !== 200) { error_log("Discord token $c : $r"); back('error'); }
+  if ($c !== 200) back('error', why('jeton', $c, $r));
   $tok = json_decode($r);
   [$c, $r] = http_req('https://discord.com/api/v10/users/@me', 'GET', ['Authorization: ' . $tok->token_type . ' ' . $tok->access_token]);
-  if ($c !== 200) { error_log("Discord profil $c : $r"); back('error'); }
-  $pf = json_decode($r); if (!$pf || empty($pf->id)) back('error');
+  if ($c !== 200) back('error', why('profil', $c, $r));
+  $pf = json_decode($r); if (!$pf || empty($pf->id)) back('error', 'profil illisible');
 
   db_open();
   $u = null; foreach ($db->users as $x) if (($x->discordId ?? '') === (string)$pf->id) $u = $x;
@@ -36,4 +41,4 @@ try {
   $u->dname = (string)($pf->global_name ?? $pf->username ?? ''); $u->dun = (string)($pf->username ?? ''); $u->avatar = $pf->avatar ?? null;
   touch_db(); db_close();
   login_user($u, true); back('ok');
-} catch (Throwable $e) { error_log('Discord : ' . $e->getMessage()); try { db_close(); } catch (Throwable $x) {} back('error'); }
+} catch (Throwable $e) { error_log('Discord : ' . $e->getMessage()); try { db_close(); } catch (Throwable $x) {} back('error', $e->getMessage()); }
