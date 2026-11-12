@@ -620,9 +620,8 @@ function rolesPanel() {
     roles.map(r => `<tr><td><input class="cin" style="width:200px" data-a="rname" data-id="${r.id}" value="${esc(r.name)}"><small class="note">${nUsers(r)} compte(s)</small></td>` + T.map(([k]) => box(`data-a="rtab" data-id="${r.id}" data-k="${k}"`, r.admin || (r.tabs || []).includes(k), r.admin)).join('') +
       `<td>${r.builtin ? '' : `<button class="btn del" data-a="rdel" data-id="${r.id}">Retirer</button>`}</td></tr>`).join('') +
     `</tbody></table></div>
-  <h3 class="sub">Permissions (actions)</h3><div class="wrapt"><table class="ptab"><thead><tr><th rowspan="2">Rôle</th>${PERM_GROUPS.map(([g, L]) => `<th colspan="${L.length}" class="pg">${g}</th>`).join('')}</tr>
-  <tr>${PERM_GROUPS.map(([, L]) => L.map(([, l], i) => `<th class="${i ? '' : 'pgs'}" style="text-align:center">${l}</th>`).join('')).join('')}</tr></thead><tbody>` +
-    roles.map(r => `<tr><td>${esc(r.name)}${r.admin ? '' : ` <button class="btn ghost mini-b" data-a="rall" data-id="${r.id}" title="Tout cocher / tout décocher">tout</button>`}</td>` + PERMS.map(([k]) => box(`data-a="rperm" data-id="${r.id}" data-k="${k}"`, r.admin || (r.perms || []).includes(k), r.admin)).join('') + '</tr>').join('') +
+  <h3 class="sub">Permissions (actions)</h3><div class="wrapt"><table class="ptab2"><thead><tr><th>Permission</th>${roles.map(r => `<th class="rc">${esc(r.name)}${r.admin ? '' : `<button class="btn ghost mini-b" data-a="rall" data-id="${r.id}" title="Tout cocher / tout décocher">tout</button>`}</th>`).join('')}</tr></thead><tbody>` +
+    PERM_GROUPS.map(([g, L]) => `<tr class="pgr"><td colspan="${roles.length + 1}">${g}</td></tr>` + L.map(([k, l]) => `<tr><td class="pl">${l}</td>` + roles.map(r => box(`data-a="rperm" data-id="${r.id}" data-k="${k}"`, r.admin || (r.perms || []).includes(k), r.admin)).join('') + '</tr>').join('')).join('') +
     `</tbody></table></div><div class="frm" style="margin-top:12px"><input id="rnew" placeholder="Nom du nouveau rôle (ex : Superviseur)"><button class="btn gold" data-a="radd">Ajouter le rôle</button></div></section>`;
 }
 const avHtml = u => u.discordId && u.avatar ? `<span class="av img" style="background-image:url(https://cdn.discordapp.com/avatars/${esc(u.discordId)}/${esc(u.avatar)}.png?size=64)"></span>` : `<span class="av">${esc(u.name.slice(0, 2))}</span>`;

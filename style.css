@@ -424,3 +424,9 @@ td.ck>.chk{display:flex;justify-content:center;align-items:center}
 .cer td:nth-child(4),.cer td:nth-child(5),.cer td:nth-child(6){text-align:center;white-space:nowrap;min-width:52px}
 .cer .r2 th.h{white-space:nowrap}
 .cer .nm .bdg{white-space:nowrap}
+/* permissions : une ligne par permission, une colonne par rôle */
+.ptab2 th.rc{text-align:center;white-space:normal}.ptab2 th.rc .mini-b{display:block;margin:6px auto 0}
+.ptab2 td.ck{width:1%;min-width:110px}
+.ptab2 td.pl{font-weight:500}
+.ptab2 tr.pgr td{padding:9px 16px 6px;background:rgba(240,138,60,.07);color:var(--acc2);font:700 .66rem Inter,sans-serif;letter-spacing:.12em;text-transform:uppercase}
+html.light .ptab2 tr.pgr td{background:rgba(224,115,31,.08);color:var(--t)}
