@@ -455,3 +455,4 @@ html.light .hbar{background:rgba(150,100,50,.15)}html.light .hbar em{background:
 .wrapt.g th{top:0}.wrapt.g thead tr:first-child th:first-child{border-top-left-radius:var(--r)}.wrapt.g thead tr:first-child th:last-child{border-top-right-radius:var(--r)}
 .mdn{width:80px;text-align:center}.mci .frm select[data-a="mu"]{flex:none;min-width:110px;width:110px}
 .mci .frm .mdn{flex:none;width:76px;min-width:0}.mci .frm select[data-a="mu"]{flex:none;width:130px;min-width:0}.mci .frm select[data-a="mauto"]{flex:1;min-width:130px}
+#dm.modal{z-index:300} /* les messages s’affichent aussi au-dessus de la page de connexion */
