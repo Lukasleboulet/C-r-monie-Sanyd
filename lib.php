@@ -17,7 +17,8 @@ if (is_file($ROOT . '/config.php')) { $c = include $ROOT . '/config.php'; if (is
 
 function base_url() {
   global $CONFIG;
-  if (!empty($CONFIG['baseUrl'])) return rtrim($CONFIG['baseUrl'], '/');
+  // tolère une adresse saisie avec un fichier ou des paramètres (ex. https://site/discord.php ou https://site/?i=1)
+  if (!empty($CONFIG['baseUrl'])) return rtrim(preg_replace('#/[^/]*\.(php|html?)$#i', '', preg_replace('/[?#].*$/', '', trim($CONFIG['baseUrl']))), '/');
   $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https' || ($_SERVER['SERVER_PORT'] ?? '') == 443;
   $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
   return ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $dir;
