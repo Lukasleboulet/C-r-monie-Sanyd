@@ -819,7 +819,7 @@ function previewHtml() {
     (groups.length ? groups.map(([k, L]) => `<div class="spg ${SYNC_L[k][1]}"><h3 class="sub">${SYNC_L[k][0]} <span class="note">(${L.length})</span></h3>${L.map(line).join('')}</div>`).join('') : '<p class="note">Tout est déjà à jour.</p>') +
     `<div class="frm"><button class="btn gold" data-a="mapply">Appliquer les changements cochés</button><button class="btn ghost" data-a="mcancel">Annuler</button></div></div>`;
 }
-let mq = '';
+let mq = '', mgq = '', mgAll = false; // recherche agents / filtre et affichage de l'historique des remises
 function vMed(part) {
   const ed = can('medalEdit'), list = byGrade(actv()).filter(a => !mq || norm(full(a) + ' ' + a.mat + ' ' + a.grade).includes(norm(mq)));
   const due = []; actv().forEach(a => S.medals.forEach(md => { const s = medState(a, md); if (md.n && s.earned && !s.given) due.push({ a, md, s }); }));
@@ -841,7 +841,17 @@ function vMed(part) {
       return `<tr><td>${esc(full(a))} ${badge(a.grade)}</td><td>${ed ? `<input type="date" class="cin" data-a="marr" data-id="${a.id}" value="${a.arr || ''}">` : fmtD(a.arr)}</td><td class="mono">${anc(a.arr)}</td><td><span class="mrow">${medRow(a)}${ed ? agentMedals(a).filter(o => !o.md.n).map(o => `<button class="mx" data-a="munaward" data-id="${a.id}" data-m="${o.md.id}" title="Retirer « ${esc(o.md.name)} »">✕</button>`).join('') : ''}</span></td>
         <td>${nx ? `<span class="mrow">${medIcon(nx.md, 'sm')} <span class="note">dans ${daysUntil(nx.s.due)} j (${fmtD(nx.s.due)})</span></span>` : a.arr ? '<span class="note">tous obtenus</span>' : '<span class="note">date d’arrivée inconnue</span>'}</td>
         ${ed && manual.length ? `<td><select class="cin" data-a="maward" data-id="${a.id}"><option value="">+ Médaille…</option>${manual.filter(m => !medState(a, m).earned).map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></td>` : ''}</tr>`; }).join('') + `</tbody></table></div>${list.length ? '' : '<p class="note">Aucun agent.</p>'}</section>`;
-  return part === 'admin' ? syncPanel + cat : dueP + tbl;
+  // historique des remises (rubans marqués « remis » + médailles attribuées à la main), du plus récent au plus ancien
+  const gq = norm(mgq), given = [];
+  S.agents.forEach(a => S.medals.forEach(md => { const aw = S.awards?.[a.id]?.[md.id]; if (!aw) return; const t = aw.given || aw.t; if (!t || (md.n && !aw.given)) return; given.push({ a, md, t, by: aw.by || '', at: md.n ? medState(a, md).due : aw.at }); }));
+  given.sort((p, q) => q.t - p.t);
+  const gl = given.filter(o => !gq || norm(full(o.a) + ' ' + o.md.name + ' ' + o.by).includes(gq)), gshow = mgAll ? gl : gl.slice(0, 15);
+  const givenP = `<section class="panel"><div class="ph"><h2>Historique des remises <span class="note">(${given.length})</span></h2><input id="mgq" placeholder="Filtrer (agent, médaille, remis par)…" value="${esc(mgq)}" style="width:300px"></div>` +
+    (gl.length ? `<div class="wrapt"><table><thead><tr><th>Agent</th><th>Ruban / médaille</th><th>Obtenu le</th><th>Remis le</th><th>Par</th><th></th></tr></thead><tbody>` +
+      gshow.map(o => `<tr${o.a.arch ? ' class="arch"' : ''}><td>${esc(full(o.a))} ${badge(o.a.grade)}${o.a.arch ? ' <span class="tag">archivé</span>' : ''}</td><td><span class="mrow">${medIcon(o.md, 'sm')} ${esc(o.md.name)}</span></td><td class="mono">${fmtD(o.at)}</td><td class="mono">${new Date(o.t).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td><td>${esc(o.by || '—')}</td>
+        <td class="acts">${ed ? (o.md.n ? `<button class="btn ghost" data-a="mungive" data-id="${o.a.id}" data-m="${o.md.id}" title="Remet ce ruban dans « à remettre »">Annuler la remise</button>` : `<button class="btn del" data-a="munaward" data-id="${o.a.id}" data-m="${o.md.id}">Retirer</button>`) : ''}</td></tr>`).join('') +
+      `</tbody></table></div>${gl.length > 15 ? `<div class="frm" style="margin-top:10px"><button class="btn ghost" data-a="mgall">${mgAll ? 'Afficher seulement les 15 dernières' : `Afficher tout (${gl.length})`}</button></div>` : ''}` : `<p class="note">${given.length ? 'Aucune remise ne correspond au filtre.' : 'Aucune remise pour l’instant : clique sur « Remis ✓ » quand tu remets un ruban.'}</p>`) + `</section>`;
+  return part === 'admin' ? syncPanel + cat : dueP + givenP + tbl;
 }
 function vMda() { return vMed('admin'); }
 function vMedMain() {
@@ -855,13 +865,15 @@ function medImg(file) { // image redimensionnée (96 px max) pour rester légèr
 document.addEventListener('click', async e => {
   const el = e.target.closest('[data-a]'); if (!el) return; const act = el.dataset.a, id = el.dataset.id;
   if (['msync', 'mapply', 'mcancel'].includes(act) && !can('sheetSync')) return;
-  if (['mgive', 'mgiveall', 'madd', 'mdel', 'mimgdel', 'munaward'].includes(act) && !can('medalEdit')) return;
+  if (['mgive', 'mgiveall', 'mungive', 'madd', 'mdel', 'mimgdel', 'munaward'].includes(act) && !can('medalEdit')) return;
   const aw = (aid, mid) => (((S.awards ||= {})[aid] ||= {})[mid] ||= {});
   if (act === 'msync') doSync();
   else if (act === 'mcancel') { syncP = null; render(); }
   else if (act === 'mapply') { const n = syncP.items.filter(i => i.on && i.k !== 'quiet').length; if (await dlg({ title: 'Appliquer la synchronisation', msg: `Appliquer ${n} changement(s) ?`, ok: 'Appliquer', icon: 'warn' })) { applySync(); await dlg({ title: 'Synchronisation terminée', msg: `${n} changement(s) appliqué(s).`, cancel: null, icon: 'info' }); } }
-  else if (act === 'mgive') { aw(id, el.dataset.m).given = Date.now(); upd(); }
-  else if (act === 'mgiveall') { if (await dlg({ title: 'Rubans remis', msg: 'Marquer tous les rubans en attente comme remis ?', ok: 'Confirmer' })) { actv().forEach(a => S.medals.forEach(md => { const s = medState(a, md); if (md.n && s.earned && !s.given) aw(a.id, md.id).given = Date.now(); })); upd(); } }
+  else if (act === 'mgive') { Object.assign(aw(id, el.dataset.m), { given: Date.now(), by: me?.name || '' }); upd(); }
+  else if (act === 'mungive') { const md = S.medals.find(x => x.id === el.dataset.m), a = S.agents.find(x => x.id === id); if (await dlg({ title: 'Annuler la remise', msg: `« ${md?.name} » de ${a ? full(a) : 'cet agent'} repassera dans « Rubans à remettre ».`, ok: 'Annuler la remise' })) { delete S.awards?.[id]?.[el.dataset.m]; upd(); } }
+  else if (act === 'mgall') { mgAll = !mgAll; render(); }
+  else if (act === 'mgiveall') { if (await dlg({ title: 'Rubans remis', msg: 'Marquer tous les rubans en attente comme remis ?', ok: 'Confirmer' })) { actv().forEach(a => S.medals.forEach(md => { const s = medState(a, md); if (md.n && s.earned && !s.given) Object.assign(aw(a.id, md.id), { given: Date.now(), by: me?.name || '' }); })); upd(); } }
   else if (act === 'madd') { const n = $('#mnn').value.trim(); if (!n) return; const auto = $('#mnt').value === '1', dn = Math.round(+$('#mnn2').value); if (auto && !(dn > 0)) { await dlg({ title: 'Durée manquante', msg: 'Indique la durée d’ancienneté (nombre supérieur à 0).', cancel: null, icon: 'warn' }); return; } S.medals.push({ id: uid() + uid(), name: n, ...(auto ? { n: dn, u: $('#mnu').value } : {}), color: RIB_COLORS[S.medals.length % RIB_COLORS.length], img: '' }); upd(); }
   else if (act === 'mdel') { const md = S.medals.find(x => x.id === id); if (md && await dlg({ title: 'Supprimer', msg: `Supprimer « ${md.name} » ? Les attributions de cette médaille seront perdues.`, ok: 'Supprimer', danger: true })) { S.medals = S.medals.filter(x => x !== md); Object.values(S.awards || {}).forEach(o => delete o[id]); upd(); } }
   else if (act === 'mimgdel') { S.medals.find(x => x.id === id).img = ''; upd(); }
@@ -888,9 +900,9 @@ document.addEventListener('change', async e => {
   else if (act === 'mcolor') { S.medals.find(x => x.id === id).color = el.value; upd(); }
   else if (act === 'mimg') { const f = el.files[0]; if (!f) return; try { S.medals.find(x => x.id === id).img = await medImg(f); upd(); } catch (x) { await dlg({ title: 'Image illisible', msg: 'Ce fichier n’est pas une image valide.', cancel: null, icon: 'warn' }); } }
   else if (act === 'marr') { const a = S.agents.find(x => x.id === id); a.arr = el.value || undefined; upd(); }
-  else if (act === 'maward') { if (!el.value) return; ((S.awards ||= {})[id] ||= {})[el.value] = { at: todayIso(), given: Date.now() }; upd(); }
+  else if (act === 'maward') { if (!el.value) return; ((S.awards ||= {})[id] ||= {})[el.value] = { at: todayIso(), given: Date.now(), by: me?.name || '' }; upd(); }
 });
-document.addEventListener('input', e => { if (e.target.id === 'mq') { mq = e.target.value; const t = $('#mtb'); if (t) { render(); const i = $('#mq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } });
+document.addEventListener('input', e => { if (e.target.id === 'mgq') { mgq = e.target.value; render(); const i = $('#mgq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); return; } if (e.target.id === 'mq') { mq = e.target.value; const t = $('#mtb'); if (t) { render(); const i = $('#mq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } });
 
 // ---------- statistiques agent ----------
 let st = { id: null, f: 0, t: null, q: '' };
