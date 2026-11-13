@@ -2,7 +2,7 @@
 const DEFAULT_GRADES = ['Capitaine','Lieutenant-Chef','Lieutenant','Sergent-2','Sergent-1','SLO','Officier-3','Officier-2','Officier','Rookie']; // du plus haut au plus bas
 const RIB_COLORS = ['#4f8ad8', '#3dbb7a', '#e0b23a', '#e0733a', '#c9473f', '#8e5bd6'];
 const defaultMedals = () => [2, 4, 6, 8, 10, 12].map((m, i) => ({ id: 'rub' + m, name: `Ruban de service — ${m} mois`, n: m, u: 'm', color: RIB_COLORS[i], img: '' }));
-const DEFAULT_ACTIONS = [{ id: 'promo', label: 'Montée', mv: -1 }, { id: 'retro', label: 'Rétrogradation', mv: 1 }]; // mv : décalage dans la hiérarchie (-1 monte, 1 descend, 0 = aucun)
+const gradeAction = g => ({ id: uid() + uid(), label: 'Passe ' + g, mv: 0, to: g }); // option de décision : passage à un grade précis
 const DEFAULT_SANCTIONS = ['Avertissement', 'Blâme', 'Mise à pied']; // modifiables par l'admin (Paramètres)
 const DIST = { mr: 'Mission Row', vesp: 'Vespucci', alta: 'Alta', sandy: 'Sandy Shore', rox: 'Roxwood' }, DIDS = Object.keys(DIST);
 const dName = d => DIST[d] || '—', dLogo = d => `assets/district-${DIST[d] ? d : 'sandy'}.png`;
@@ -33,7 +33,7 @@ function seed() {
   return {
     weeks: SEED.weeks.length ? [...SEED.weeks] : [thisMonday()],
     agents: SEED.rows.map(([mat, nom, prenom, grade, w]) => ({ id: uid(), mat, nom, prenom, grade, w })),
-    grades: [...DEFAULT_GRADES], gcol: {}, sanctions: [...DEFAULT_SANCTIONS], actions: DEFAULT_ACTIONS.map(x => ({ ...x })),
+    grades: [...DEFAULT_GRADES], gcol: {}, sanctions: [...DEFAULT_SANCTIONS], actions: [],
     ceremonies: {} // { "19/10": { agentId: {a: id de l’option, from, g, r, done} } }
   };
 }
@@ -54,7 +54,10 @@ function migrate(d) { // le grade « Rookie-PPA » n'existe pas : fusionné dans
   Object.values(d.ceremonies || {}).forEach(c => Object.values(c).forEach(x => { x.from = fix(x.from); x.g = fix(x.g); }));
   d.grades = [...new Set((d.grades || DEFAULT_GRADES).map(fix))];
   d.agents.forEach(a => { if (!d.grades.includes(a.grade)) d.grades.push(a.grade); });
-  d.actions ||= DEFAULT_ACTIONS.map(x => ({ ...x }));
+  d.actions ||= [];
+  { const used = new Set(); Object.values(d.ceremonies || {}).forEach(c => Object.values(c).forEach(x => x.a && used.add(x.a)));
+    d.actions = d.actions.filter(x => x.to !== undefined || used.has(x.id)); // anciennes options « monte / descend » retirées (sauf si déjà utilisées dans une cérémonie)
+    if (!d.actions.some(x => x.to !== undefined)) d.actions.push(...d.grades.filter(g => !(d.ignRanks || ['Patron', 'Sheriff']).some(r => r.toLowerCase() === g.toLowerCase())).map(gradeAction)); }
   d.gcol ||= {};
   d.glog ||= [];
   d.medals ||= defaultMedals();
@@ -201,9 +204,9 @@ function vSet() {
   <section class="panel"><h2>Rangs masqués</h2><p class="note">Les lignes de ces rangs sont ignorées à l’import (heures, création d’agent et de grade) et les agents de ces rangs n’apparaissent nulle part — sauf ceux que tu as ajoutés toi-même dans Effectifs. ${(() => { const n = S.agents.filter(hiddenA).length; return n ? `<b>${n}</b> agent(s) actuellement masqué(s).` : ''; })()}</p>` + lockFs('gradeEdit',
     `<div class="frm">${(S.ignRanks || []).map((x, i) => `<span class="tag">${esc(x)} <button class="btn del mini-b" data-a="irdel" data-i="${i}" title="Ne plus masquer">✕</button></span>`).join('') || '<span class="note">Aucun rang masqué.</span>'}</div>
     <div class="frm"><input id="irn" placeholder="Rang à masquer (ex : Patron)"><button class="btn gold" data-a="iradd">Ajouter</button></div>`) + `</section>
-  <section class="panel"><h2>Options de décision (cérémonie)</h2><p class="note">Chaque option peut monter ou descendre d’un ou deux grades, ne rien changer, ou envoyer vers un grade précis (ex : Passe à SLO). Dans la cérémonie, le nouveau grade reste modifiable.</p>` + lockFs('actionEdit',
-    S.actions.map((x, i) => `<div class="frm srow ac">${mvBtns('a', i, S.actions.length)}<input data-a="aname" data-id="${x.id}" value="${esc(x.label)}"><select data-a="aeff" data-id="${x.id}">${effOpts(x.to !== undefined ? 'fix' : x.mv)}</select>${x.to !== undefined ? `<select data-a="ato" data-id="${x.id}">${gopts(x.to)}</select>` : '<span></span>'}<button class="btn del" data-a="adel" data-id="${x.id}">Retirer</button></div>`).join('') +
-    `<div class="frm"><input id="an2" placeholder="Nouvelle option"><select id="ae">${effOpts(0)}</select><select id="at" hidden>${gopts(S.grades[0])}</select><button class="btn gold" data-a="aadd">Ajouter</button></div>`) + `</section>
+  <section class="panel"><h2>Options de décision (cérémonie)</h2><p class="note">Chaque option fait passer l’agent à un grade précis (ex : Passe SLO). Dans la cérémonie, choisis l’option ou directement le nouveau grade.</p>` + lockFs('actionEdit',
+    S.actions.map((x, i) => `<div class="frm srow ac">${mvBtns('a', i, S.actions.length)}<input data-a="aname" data-id="${x.id}" value="${esc(x.label)}">${x.to !== undefined ? `<select data-a="ato" data-id="${x.id}" title="Grade obtenu">${gopts(x.to)}</select>` : '<span class="note">ancienne option (déjà utilisée)</span>'}<button class="btn del" data-a="adel" data-id="${x.id}">Retirer</button></div>`).join('') +
+    `<div class="frm"><select id="at" title="Grade obtenu">${gopts(S.grades[0])}</select><input id="an2" placeholder="Nom de l’option (vide = « Passe » + grade)"><button class="btn gold" data-a="aadd">Ajouter</button><button class="btn ghost" data-a="aall" title="Ajoute « Passe … » pour chaque grade qui n’a pas encore d’option">Une option par grade</button></div>`) + `</section>
   <section class="panel"><h2>Sanctions (menu déroulant de la cérémonie)</h2>` + lockFs('sanctionEdit',
     S.sanctions.map((x, i) => `<div class="frm srow sa">${mvBtns('s', i, S.sanctions.length)}<input data-a="sname" data-i="${i}" value="${esc(x)}"><button class="btn del" data-a="sdel" data-i="${i}">Retirer</button></div>`).join('') +
     `<div class="frm"><input id="sn" placeholder="Nouvelle sanction (ex : Mise à pied 48h)"><button class="btn gold" data-a="sadd">Ajouter</button></div>`) + `</section>`;
@@ -351,7 +354,7 @@ document.addEventListener('click', async e => {
   if (act === 'week' && !can('weekAdd')) return;
   if (act === 'apply' && !can('cerValidate')) return;
   if (['gadd', 'gdel', 'gup', 'gdn', 'gcolr', 'iradd', 'irdel'].includes(act) && !can('gradeEdit')) return;
-  if (['aadd', 'adel', 'aup', 'adn'].includes(act) && !can('actionEdit')) return;
+  if (['aadd', 'aall', 'adel', 'aup', 'adn'].includes(act) && !can('actionEdit')) return;
   if (['sadd', 'sdel', 'sup', 'sdn'].includes(act) && !can('sanctionEdit')) return;
   if (act === 'add') {
     const nom = $('#n-nom').value.trim(), pre = $('#n-pre').value.trim(); if (!nom && !pre) return;
@@ -427,7 +430,8 @@ document.addEventListener('click', async e => {
     const i = +el.dataset.i, g = S.grades[i];
     if (S.agents.some(a => a.grade === g) || S.actions.some(x => x.to === g)) await dlg({ title: 'Grade utilisé', msg: 'Des agents ou des options utilisent encore ce grade : change-les avant de le retirer.', cancel: null, icon: 'warn' });
     else if (await dlg({ title: 'Retirer le grade', msg: `Retirer le grade « ${g} » ?`, ok: 'Retirer', danger: true })) { S.grades.splice(i, 1); delete S.gcol[g]; upd(); }
-  } else if (act === 'aadd') { const n = $('#an2').value.trim(); if (n) { { const ef = $('#ae').value; S.actions.push({ id: uid(), label: n, mv: ef === 'fix' ? 0 : +ef, ...(ef === 'fix' ? { to: $('#at').value } : {}) }); } upd(); } }
+  } else if (act === 'aadd') { const g = $('#at').value, n = $('#an2').value.trim(); if (g) { S.actions.push({ ...gradeAction(g), ...(n ? { label: n } : {}) }); upd(); } }
+  else if (act === 'aall') { const have = new Set(S.actions.map(x => x.to)); S.grades.filter(g => !have.has(g) && !ignR(g)).forEach(g => S.actions.push(gradeAction(g))); upd(); }
   else if (act === 'adel') {
     if (Object.values(S.ceremonies).some(c => Object.values(c).some(x => x.a === id))) await dlg({ title: 'Option utilisée', msg: 'Cette option est utilisée dans une cérémonie : impossible de la retirer.', cancel: null, icon: 'warn' });
     else if (await dlg({ title: 'Retirer l’option', msg: 'Retirer cette option de décision ?', ok: 'Retirer', danger: true })) { S.actions = S.actions.filter(x => x.id !== id); upd(); }
@@ -513,7 +517,7 @@ document.addEventListener('change', e => {
     if (!d.a) {
       const i = S.grades.indexOf(a.grade), k = S.grades.indexOf(el.value);
       if (k === i) return;
-      const ac = S.actions.find(x => x.to === undefined && (k < i ? x.mv < 0 : x.mv > 0)) || S.actions[0];
+      let ac = S.actions.find(x => x.to === el.value); if (!ac) { ac = gradeAction(el.value); S.actions.push(ac); }
       decide(a.id, { a: ac.id, from: a.grade, g: el.value });
     } else decide(a.id, { g: el.value });
     upd();
