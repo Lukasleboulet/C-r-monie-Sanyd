@@ -541,3 +541,8 @@ html.light[data-d="rox"] .cer th.h{background:#dbe8d8;color:#1f3d22}html.light[d
 html.light[data-d]:not([data-d="sandy"]) .appbar{background:rgba(var(--lcardr),.95)}
 html.light[data-d]:not([data-d="sandy"]) .btn.gold,html.light[data-d]:not([data-d="sandy"]) .seg.on{color:#fff}
 html.light .dchip{background:var(--lin)}
+.cer select[data-a="act"],.cer select[data-a="ng"]{width:132px}
+/* coins des tableaux : le cadre découpe son contenu (les coins restent arrondis en haut de page, et l'en-tête collant
+   devient un rectangle net quand on fait défiler : plus de lignes visibles dans les angles) */
+.wrapt:not(.g){overflow:clip}
+.wrapt:not(.g) thead tr:first-child th:first-child,.wrapt:not(.g) thead tr:first-child th:last-child{border-radius:0}

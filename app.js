@@ -164,6 +164,13 @@ function infoCell(a, d, [k, , t], dis) {
   if (t === 'sel') { const L = [...S.sanctions]; if (v && !L.includes(v)) L.push(v); return `<td><select class="cin" ${at}><option value="">—</option>${L.map(o => `<option ${v === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></td>`; }
   return `<td><input class="cin" type="number" min="0" ${at} value="${esc(v ?? '')}"></td>`;
 }
+// texte d'une option dans la cérémonie : grade visé avec ▲ (montée), ▼ (descente) ou = (même grade) par rapport au grade actuel
+function decTxt(x, cur) {
+  if (x.to === undefined) return `${sym(x)} ${x.label}`;
+  const i = S.grades.indexOf(cur), k = S.grades.indexOf(x.to), def = x.label === 'Passe ' + x.to;
+  const ar = i < 0 || k < 0 ? '→' : k < i ? '▲' : k > i ? '▼' : '=';
+  return `${ar} ${def ? x.to : x.label}`;
+}
 const cerN = () => Math.min(4, Math.max(2, S.cerN || 3)); // nombre de semaines de la cérémonie (3 par défaut)
 function vCer() {
   if (cw == null || cw >= S.weeks.length) cw = S.weeks.length - 1;
@@ -172,7 +179,7 @@ function vCer() {
     const hs = win.map(i => i >= 0 ? a.w[i] : null), d = D[a.id] || {}, on = !!d.a, lock = !can('cerEdit') || (d.done && !can('cerEditDone'));
     const gi0 = S.grades.indexOf(d.done ? d.from : a.grade), gk = S.grades.indexOf(d.g || ''), cls = !on ? '' : gk < 0 || gk === gi0 ? 'dec' : gk < gi0 ? 'up' : 'down';
     return `<tr class="${cls}"><td><div class="nm"><span>${esc(a.prenom)} <b>${esc((a.nom || '').toUpperCase())}</b></span>${badge(d.done ? d.from : a.grade)}</div></td><td class="mono">${esc(a.mat)}</td>
-    <td><div class="stk"><select class="cin" data-a="act" data-id="${a.id}" ${lock ? 'disabled' : ''}><option value="">Décision</option>${S.actions.map(x => `<option value="${x.id}" ${d.a === x.id ? 'selected' : ''}>${sym(x)} ${esc(x.label)}</option>`).join('')}</select>
+    <td><div class="stk"><select class="cin" data-a="act" data-id="${a.id}" ${lock ? 'disabled' : ''}><option value="">Décision</option>${S.actions.map(x => `<option value="${x.id}" ${d.a === x.id ? 'selected' : ''} title="${esc(x.label)}">${esc(decTxt(x, d.done ? d.from : a.grade))}</option>`).join('')}</select>
     <select class="cin" data-a="ng" data-id="${a.id}" title="Nouveau grade" ${lock ? 'disabled' : ''}>${gopts(on ? d.g || a.grade : a.grade)}</select></div></td>
     ${hs.map(h => `<td class="hc">${F(h)}</td>`).join('')}<td class="hc"><b>${F(Math.round(hs.reduce((x, y) => x + (y || 0), 0) / nOk))}</b></td>
     ${INFO.map(i => infoCell(a, d, i, !can('cerEdit'))).join('')}
@@ -187,10 +194,12 @@ function vCer() {
   <div class="frm noprint"><button class="btn gold" data-a="copy">Copier</button>
   ${can('cerValidate') ? '<button class="btn" data-a="apply">Valider : appliquer les changements de grade</button>' : ''}</div></section>`;
 }
+// agent dans le récap (format Discord) : <@ID Discord> - matricule | Nom Prénom (ID Discord lu dans le Google Sheet)
+const who = a => `${a.did ? `<@${a.did}> - ` : ''}${a.mat && a.mat !== '-' ? a.mat : '?'} | ${a.nom || ''} ${a.prenom || ''}`.trim();
 function recap() {
   const D = S.ceremonies[S.weeks[cw]] || {}, L = actv().filter(a => D[a.id]?.a);
   const blocks = S.actions.map(x => {
-    const r = L.filter(a => D[a.id].a === x.id).map(a => `• ${full(a)} (${a.mat}) : ${D[a.id].from || a.grade} → ${D[a.id].g || a.grade} — ${D[a.id].r || 'sans raison'}`);
+    const r = L.filter(a => D[a.id].a === x.id).map(a => `${who(a)} : ${D[a.id].from || a.grade} → ${D[a.id].g || a.grade} — ${D[a.id].r || 'sans raison'}`);
     return r.length ? `${sym(x)} ${x.label.toUpperCase()}\n${r.join('\n')}` : '';
   }).filter(Boolean);
   return `SAMP — DISTRICT DE ${dName(DD || curD).toUpperCase()}\nCÉRÉMONIE — SEMAINE DU ${S.weeks[cw]}\n\n` + (blocks.join('\n\n') || 'Aucune décision.');
