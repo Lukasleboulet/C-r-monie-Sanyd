@@ -9,6 +9,7 @@ Site + **serveur** : les comptes, les rôles et les données sont stockés sur l
 4. Double-clique **`DEMARRER.bat`** : une adresse `https://xxxx.trycloudflare.com` s'affiche. C'est l'adresse du site.
 5. Portail Discord › OAuth2 › Redirects : ajoute `https://xxxx.trycloudflare.com/discord.php` (affichée aussi dans la fenêtre du serveur).
 - Garde les deux fenêtres ouvertes et le PC allumé : sinon le site est coupé.
+- **Mettre à jour le site** : double-clique **`METTRE-A-JOUR.bat`** (télécharge la dernière version depuis GitHub, sans toucher à `data` ni à `config.json`), puis Ctrl + F5 dans le navigateur. Si `server.js` a changé : ferme seulement la fenêtre du serveur et lance **`RELANCER-SERVEUR.bat`** (l'adresse du site ne change pas).
 - ⚠️ Sans nom de domaine, **l'adresse change à chaque lancement de DEMARRER.bat** : il faut alors la redonner aux collègues et mettre à jour la redirection Discord. Pour une adresse fixe : un nom de domaine branché sur Cloudflare (tunnel nommé).
 - Reprendre les données d'InfinityFree : copie `data/db.php` dans le dossier `data/` du projet avant le premier lancement (importé automatiquement).
 

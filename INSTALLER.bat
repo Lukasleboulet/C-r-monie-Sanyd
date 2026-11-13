@@ -20,7 +20,7 @@ echo  ============================================================
 echo   Installation terminee.
 echo   1. Ouvre config.json (Bloc-notes) et colle ton Client ID
 echo      et ta cle secrete Discord.
-echo   2. Lance DEMARRER.bat
+echo   2. Redemarre le PC, puis lance DEMARRER.bat
 echo  ============================================================
 echo.
 pause
