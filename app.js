@@ -190,22 +190,25 @@ function vCer() {
   <label class="note cern">Moyenne sur <select id="cern">${[2, 3, 4].map(n => `<option value="${n}" ${n === N ? 'selected' : ''}>${n} semaines</option>`).join('')}</select></label><span class="note">${win.map((i, k) => `S-${k + 1} = ${i >= 0 ? S.weeks[i] : '—'}`).join(' · ')} · Moyenne = (${win.map((_, k) => 'S-' + (k + 1)).join(' + ')}) ÷ ${nOk}${nOk < N ? ` (seulement ${nOk} semaine(s) enregistrée(s))` : ''} · Choisis une décision, ou directement un nouveau grade.</span></div></section>
   <div class="wrapt cerw"><table class="cer"><thead><tr><th rowspan="2">Prénom NOM</th><th rowspan="2">Matricule</th><th rowspan="2">Promotion</th><th colspan="${N + 1}" class="h">Nombre d’heures par semaine</th><th colspan="6" class="i">Informations</th><th rowspan="2" class="e">Explication décision</th><th rowspan="2" class="n">Notes CS</th></tr>
   <tr class="r2">${win.map((i, k) => `<th class="h">S-${k + 1}<small>${i >= 0 ? S.weeks[i] : '—'}</small></th>`).join('')}<th class="h">Moyenne</th>${INFO.map(i => `<th class="i">${i[1]}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
-  <section class="panel" style="margin-top:14px"><h2>Récapitulatif</h2><div class="frm rcset noprint"><label class="note">Emoji du titre <input data-a="rcemo" value="${esc(S.cerEmoji ?? '🛡️')}" placeholder="ex : 🛡️ ou <:logo:123>" ${can('cerEdit') ? '' : 'disabled'}></label><label class="note rcf">Fin du message <textarea data-a="rcfoot" rows="2" placeholder="*Félicitation à vous !*" ${can('cerEdit') ? '' : 'disabled'}>${esc(S.cerFoot ?? '*Félicitation à vous !*')}</textarea></label></div><pre id="rc">${esc(recap())}</pre>
+  <section class="panel" style="margin-top:14px"><h2>Récapitulatif</h2><div class="frm rcset noprint"><label class="note">Emoji du titre <input data-a="rcemo" value="${esc(cerEmo())}" placeholder="ex : :alta2:" ${can('cerEdit') ? '' : 'disabled'}></label><label class="note rcf">Fin du message <textarea data-a="rcfoot" rows="2" placeholder="*Félicitation à vous !*" ${can('cerEdit') ? '' : 'disabled'}>${esc(S.cerFoot ?? DEF_FOOT)}</textarea></label></div><pre id="rc">${esc(recap())}</pre>
   <div class="frm noprint"><button class="btn gold" data-a="copy">Copier</button>
   ${can('cerValidate') ? '<button class="btn" data-a="apply">Valider : appliquer les changements de grade</button>' : ''}</div></section>`;
 }
 // Récap au format du message Discord de la cérémonie :
 // ## 🛡️ Cérémonie Alta - 05/11/2026 🛡️ / **Sergent II -> Lieutenant :** / - <@ID Discord> (Discord affiche le pseudo de l'agent)
+const DEMO = { alta: ':alta2:', vesp: ':vespucci2:', mr: ':missionrow2:', rox: ':roxwood2:', sandy: ':sandyshores2:' }; // emoji Discord du titre, par district
+const DEF_FOOT = '*Félicitation à vous !*\n-# <@1521910777588482238>';
+const cerEmo = () => S.cerEmoji ?? DEMO[DD || curD] ?? '';
 const gTxt = g => (S.grecap?.[g] || '').trim() || g; // nom du grade dans le récap (peut contenir un emoji Discord)
-const who = a => a.did ? `<@${a.did}>` : `${a.mat && a.mat !== '-' ? a.mat + ' | ' : ''}${a.prenom || ''} ${a.nom || ''}`.trim();
+const who = a => `${a.did ? `<@${a.did}> - ` : ''}${a.mat && a.mat !== '-' ? a.mat : '?'} | ${a.nom || ''} ${a.prenom || ''}`.trim();
 function weekFull(w) { const k = weekKey(w); return `${String(k % 100).padStart(2, '0')}/${String(Math.floor(k / 100) % 100).padStart(2, '0')}/${Math.floor(k / 10000)}`; }
 function recap() {
   const D = S.ceremonies[S.weeks[cw]] || {}, gi2 = g => { const i = S.grades.indexOf(g); return i < 0 ? 999 : i; }, groups = new Map();
   actv().filter(a => D[a.id]?.a).forEach(a => { const d = D[a.id], from = d.from || a.grade, to = d.g || a.grade, k = from + '\u0000' + to; if (!groups.has(k)) groups.set(k, { from, to, L: [] }); groups.get(k).L.push(a); });
   const G = [...groups.values()].sort((p, q) => gi2(p.to) - gi2(q.to) || gi2(p.from) - gi2(q.from)); // du grade le plus haut au plus bas
-  const e = (S.cerEmoji ?? '🛡️').trim(), head = `## ${e ? e + ' ' : ''}Cérémonie ${dName(DD || curD)} - ${weekFull(S.weeks[cw])}${e ? ' ' + e : ''}`;
+  const e = cerEmo().trim(), head = `## ${e ? e + ' ' : ''}Cérémonie ${dName(DD || curD)} - ${weekFull(S.weeks[cw])}${e ? ' ' + e : ''}`;
   const body = G.map(g => `**${gTxt(g.from)} -> ${gTxt(g.to)} :**\n\n` + g.L.sort((p, q) => (p.nom || '').localeCompare(q.nom || '')).map(a => `- ${who(a)}`).join('\n')).join('\n\n');
-  const foot = (S.cerFoot ?? '*Félicitation à vous !*').trim();
+  const foot = (S.cerFoot ?? DEF_FOOT).trim();
   return head + '\n' + (body || '*Aucune décision.*') + (foot ? '\n\n\n' + foot : '');
 }
 const lockFs = (perm, html) => can(perm) ? html : `<fieldset class="ro" disabled title="Ton rôle ne permet pas de modifier cette section">${html}</fieldset>`;
