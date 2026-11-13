@@ -148,7 +148,7 @@ function vImp() {
   <p class="note">Colle directement ton tableau (colonnes <code>Nom ⇥ Rang ⇥ Part employé ⇥ Heures</code>, l’en-tête et la ligne TOTAL sont ignorés ; la part employé n’est pas utilisée), ou des lignes du type <code>Prénom Nom 43h30min</code>. Les agents sont reconnus par « Prénom Nom ».</p>
   <div class="frm"><select id="iw">${wopts(S.weeks.length - 1)}</select>${can('weekAdd') ? '<button class="btn ghost" data-a="week">+ Nouvelle semaine</button>' : ''}
   <span class="note">Les agents sont reconnus par leur nom ; ceux qui n’existent pas sur le site sont seulement listés (les agents se gèrent via le Google Sheet ou l’onglet Effectifs).</span></div>
-  <textarea id="it" placeholder="Rayan Sef&#9;Patron&#9;0&#9;3h50min&#10;Paul Pinoto&#9;Patron&#9;0&#9;14h26min"></textarea>
+  <textarea id="it" placeholder="Mathis Evans&#9;Capitaine&#9;0&#9;43h30min&#10;Harvey Weston&#9;Field Officer&#9;0&#9;14h26min"></textarea>
   <div class="frm" style="margin-top:8px"><button class="btn gold" data-a="import">Importer</button></div><div id="ir" class="note"></div></section>`;
 }
 const INFO = [['casiers', 'Nb Casiers', 'num'], ['sanction', 'Sanction', 'sel'], ['fps', 'Forma PS', 'chk'], ['f1020', 'Forma 10-20', 'chk'], ['fus', 'Fusillade / PPA L (slo)', 'chk'], ['abs', 'Absence', 'chk']];
