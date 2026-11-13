@@ -190,25 +190,29 @@ function vCer() {
   <label class="note cern">Moyenne sur <select id="cern">${[2, 3, 4].map(n => `<option value="${n}" ${n === N ? 'selected' : ''}>${n} semaines</option>`).join('')}</select></label><span class="note">${win.map((i, k) => `S-${k + 1} = ${i >= 0 ? S.weeks[i] : '—'}`).join(' · ')} · Moyenne = (${win.map((_, k) => 'S-' + (k + 1)).join(' + ')}) ÷ ${nOk}${nOk < N ? ` (seulement ${nOk} semaine(s) enregistrée(s))` : ''} · Choisis une décision, ou directement un nouveau grade.</span></div></section>
   <div class="wrapt cerw"><table class="cer"><thead><tr><th rowspan="2">Prénom NOM</th><th rowspan="2">Matricule</th><th rowspan="2">Promotion</th><th colspan="${N + 1}" class="h">Nombre d’heures par semaine</th><th colspan="6" class="i">Informations</th><th rowspan="2" class="e">Explication décision</th><th rowspan="2" class="n">Notes CS</th></tr>
   <tr class="r2">${win.map((i, k) => `<th class="h">S-${k + 1}<small>${i >= 0 ? S.weeks[i] : '—'}</small></th>`).join('')}<th class="h">Moyenne</th>${INFO.map(i => `<th class="i">${i[1]}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
-  <section class="panel" style="margin-top:14px"><h2>Récapitulatif</h2><pre id="rc">${esc(recap())}</pre>
+  <section class="panel" style="margin-top:14px"><h2>Récapitulatif</h2><div class="frm rcset noprint"><label class="note">Emoji du titre <input data-a="rcemo" value="${esc(S.cerEmoji ?? '🛡️')}" placeholder="ex : 🛡️ ou <:logo:123>" ${can('cerEdit') ? '' : 'disabled'}></label><label class="note rcf">Fin du message <textarea data-a="rcfoot" rows="2" placeholder="*Félicitation à vous !*" ${can('cerEdit') ? '' : 'disabled'}>${esc(S.cerFoot ?? '*Félicitation à vous !*')}</textarea></label></div><pre id="rc">${esc(recap())}</pre>
   <div class="frm noprint"><button class="btn gold" data-a="copy">Copier</button>
   ${can('cerValidate') ? '<button class="btn" data-a="apply">Valider : appliquer les changements de grade</button>' : ''}</div></section>`;
 }
-// agent dans le récap (format Discord) : <@ID Discord> - matricule | Nom Prénom (ID Discord lu dans le Google Sheet)
-const who = a => `${a.did ? `<@${a.did}> - ` : ''}${a.mat && a.mat !== '-' ? a.mat : '?'} | ${a.nom || ''} ${a.prenom || ''}`.trim();
+// Récap au format du message Discord de la cérémonie :
+// ## 🛡️ Cérémonie Alta - 05/11/2026 🛡️ / **Sergent II -> Lieutenant :** / - <@ID Discord> (Discord affiche le pseudo de l'agent)
+const gTxt = g => (S.grecap?.[g] || '').trim() || g; // nom du grade dans le récap (peut contenir un emoji Discord)
+const who = a => a.did ? `<@${a.did}>` : `${a.mat && a.mat !== '-' ? a.mat + ' | ' : ''}${a.prenom || ''} ${a.nom || ''}`.trim();
+function weekFull(w) { const k = weekKey(w); return `${String(k % 100).padStart(2, '0')}/${String(Math.floor(k / 100) % 100).padStart(2, '0')}/${Math.floor(k / 10000)}`; }
 function recap() {
-  const D = S.ceremonies[S.weeks[cw]] || {}, L = actv().filter(a => D[a.id]?.a);
-  const blocks = S.actions.map(x => {
-    const r = L.filter(a => D[a.id].a === x.id).map(a => `${who(a)} : ${D[a.id].from || a.grade} → ${D[a.id].g || a.grade} — ${D[a.id].r || 'sans raison'}`);
-    return r.length ? `${sym(x)} ${x.label.toUpperCase()}\n${r.join('\n')}` : '';
-  }).filter(Boolean);
-  return `SAMP — DISTRICT DE ${dName(DD || curD).toUpperCase()}\nCÉRÉMONIE — SEMAINE DU ${S.weeks[cw]}\n\n` + (blocks.join('\n\n') || 'Aucune décision.');
+  const D = S.ceremonies[S.weeks[cw]] || {}, gi2 = g => { const i = S.grades.indexOf(g); return i < 0 ? 999 : i; }, groups = new Map();
+  actv().filter(a => D[a.id]?.a).forEach(a => { const d = D[a.id], from = d.from || a.grade, to = d.g || a.grade, k = from + '\u0000' + to; if (!groups.has(k)) groups.set(k, { from, to, L: [] }); groups.get(k).L.push(a); });
+  const G = [...groups.values()].sort((p, q) => gi2(p.to) - gi2(q.to) || gi2(p.from) - gi2(q.from)); // du grade le plus haut au plus bas
+  const e = (S.cerEmoji ?? '🛡️').trim(), head = `## ${e ? e + ' ' : ''}Cérémonie ${dName(DD || curD)} - ${weekFull(S.weeks[cw])}${e ? ' ' + e : ''}`;
+  const body = G.map(g => `**${gTxt(g.from)} -> ${gTxt(g.to)} :**\n\n` + g.L.sort((p, q) => (p.nom || '').localeCompare(q.nom || '')).map(a => `- ${who(a)}`).join('\n')).join('\n\n');
+  const foot = (S.cerFoot ?? '*Félicitation à vous !*').trim();
+  return head + '\n' + (body || '*Aucune décision.*') + (foot ? '\n\n\n' + foot : '');
 }
 const lockFs = (perm, html) => can(perm) ? html : `<fieldset class="ro" disabled title="Ton rôle ne permet pas de modifier cette section">${html}</fieldset>`;
 const mgr = () => admin || can('usersManage'); // gestion des comptes (non administrateurs)
 function vSet() {
   return `<section class="panel"><h2>Grades (du plus haut au plus bas)</h2>${can('gradeEdit') ? '' : '<p class="note">Lecture seule.</p>'}` + lockFs('gradeEdit', 
-    S.grades.map((g, i) => `<div class="frm srow gr"><button class="btn ghost" data-a="gup" data-i="${i}" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost" data-a="gdn" data-i="${i}" ${i < S.grades.length - 1 ? '' : 'disabled'}>▼</button><input data-a="gname" data-i="${i}" value="${esc(g)}"><input type="color" class="col" data-a="gcol" data-i="${i}" value="${gradeColor(g)}" title="Couleur du grade"><button class="btn ghost" data-a="gcolr" data-i="${i}" title="Couleur par défaut">↺</button><span class="note">${S.agents.filter(a => a.grade === g).length} agent(s)</span><button class="btn del" data-a="gdel" data-i="${i}">Retirer</button></div>`).join('') +
+    S.grades.map((g, i) => `<div class="frm srow gr"><button class="btn ghost" data-a="gup" data-i="${i}" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost" data-a="gdn" data-i="${i}" ${i < S.grades.length - 1 ? '' : 'disabled'}>▼</button><input data-a="gname" data-i="${i}" value="${esc(g)}"><input data-a="grec" data-i="${i}" value="${esc(S.grecap?.[g] || '')}" placeholder="Texte dans le récap (ex : ${esc(g)} <:emoji:123>)" title="Nom du grade dans le récap Discord (vide = nom du grade)"><input type="color" class="col" data-a="gcol" data-i="${i}" value="${gradeColor(g)}" title="Couleur du grade"><button class="btn ghost" data-a="gcolr" data-i="${i}" title="Couleur par défaut">↺</button><span class="note">${S.agents.filter(a => a.grade === g).length} agent(s)</span><button class="btn del" data-a="gdel" data-i="${i}">Retirer</button></div>`).join('') +
     `<div class="frm"><input id="gn" placeholder="Nouveau grade (ajouté en bas, puis déplace-le avec ▲)"><button class="btn gold" data-a="gadd">Ajouter</button></div>`) + `</section>
   <section class="panel"><h2>Rangs masqués</h2><p class="note">Les lignes de ces rangs sont ignorées à l’import (heures, création d’agent et de grade) et les agents de ces rangs n’apparaissent nulle part — sauf ceux que tu as ajoutés toi-même dans Effectifs. ${(() => { const n = S.agents.filter(hiddenA).length; return n ? `<b>${n}</b> agent(s) actuellement masqué(s).` : ''; })()}</p>` + lockFs('gradeEdit',
     `<div class="frm">${(S.ignRanks || []).map((x, i) => `<span class="tag">${esc(x)} <button class="btn del mini-b" data-a="irdel" data-i="${i}" title="Ne plus masquer">✕</button></span>`).join('') || '<span class="note">Aucun rang masqué.</span>'}</div>
@@ -462,6 +466,7 @@ document.addEventListener('change', e => {
   if (act === 'sname' && !can('sanctionEdit')) return;
   if (['udid', 'urole'].includes(act) && !mgr()) return;
   if (el.id === 'cw') { cw = +el.value; render(); }
+  else if (act === 'rcemo' || act === 'rcfoot') { if (!can('cerEdit')) return; S[act === 'rcemo' ? 'cerEmoji' : 'cerFoot'] = el.value; save(); const rc = $('#rc'); if (rc) rc.textContent = recap(); }
   else if (el.id === 'cern') { if (!can('cerEdit')) { render(); return; } S.cerN = +el.value; upd(); }
   else if (el.id === 'fg') { flt.g = el.value; $('#list').innerHTML = listHtml(); }
   else if (el.id === 'hw') { hw = +el.value; render(); }
@@ -486,6 +491,7 @@ document.addEventListener('change', e => {
   }
   else if (act === 'inf') { ent(el.dataset.id)[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value; save(); }
   else if (act === 'egr') { if (!can('agentEdit')) return; const a = S.agents.find(x => x.id === el.dataset.id), old = a.grade; a.grade = el.value; if (old !== a.grade) { logGrade(a, old, a.grade, 'modification manuelle'); a.man = true; } save(); }
+  else if (act === 'grec') { if (!can('gradeEdit')) return; (S.grecap ||= {})[S.grades[+el.dataset.i]] = el.value.trim(); save(); }
   else if (act === 'gcol') { S.gcol[S.grades[+el.dataset.i]] = el.value; upd(); }
   else if (act === 'emat' || act === 'epre' || act === 'enom') { // modifier matricule / prénom / nom
     if (!can('agentEdit')) return;
@@ -505,6 +511,7 @@ document.addEventListener('change', e => {
     S.actions.forEach(x => { if (x.to === old) x.to = nv; });
     Object.values(S.ceremonies).forEach(c => Object.values(c).forEach(x => { if (x.from === old) x.from = nv; if (x.g === old) x.g = nv; }));
     if (S.gcol[old]) { S.gcol[nv] = S.gcol[old]; delete S.gcol[old]; }
+    if (S.grecap?.[old] != null) { S.grecap[nv] = S.grecap[old]; delete S.grecap[old]; }
     S.grades[i] = nv; upd();
   } else if (act === 'aname') { const x = S.actions.find(y => y.id === el.dataset.id); if (el.value.trim()) x.label = el.value.trim(); upd(); }
   else if (act === 'aeff') { const x = S.actions.find(y => y.id === el.dataset.id); if (el.value === 'fix') { x.to = x.to ?? S.grades[0]; x.mv = 0; } else { x.mv = +el.value; delete x.to; } upd(); }

@@ -546,3 +546,6 @@ html.light .dchip{background:var(--lin)}
    devient un rectangle net quand on fait défiler : plus de lignes visibles dans les angles) */
 .wrapt:not(.g){overflow:clip}
 .wrapt:not(.g) thead tr:first-child th:first-child,.wrapt:not(.g) thead tr:first-child th:last-child{border-radius:0}
+.frm.srow.gr{grid-template-columns:40px 40px minmax(160px,1fr) minmax(200px,1.2fr) 52px 44px 92px 90px}
+.rcset{align-items:flex-start;gap:14px;margin-bottom:10px}.rcset label{display:flex;flex-direction:column;gap:5px}.rcset input{width:220px}.rcset .rcf{flex:1}.rcset textarea{width:100%;min-height:58px;box-sizing:border-box}
+html[data-d]:not([data-d="sandy"]) .btn:not(.gold):not(.ghost):not(.del):not(.dc):not(.out){background:linear-gradient(135deg,color-mix(in srgb,var(--acc) 34%,var(--card2)),color-mix(in srgb,var(--acc) 16%,var(--card)));border-color:rgba(var(--accr),.35)}
