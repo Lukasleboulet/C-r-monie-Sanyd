@@ -8,7 +8,7 @@ error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE); ini_set('display_errors', '0
 const DATA_GUARD = "<?php http_response_code(404); exit; ?>\n"; // empêche la lecture directe des fichiers de données
 const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set'];
 const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'cerEditDone', 'gradeEdit', 'actionEdit', 'sanctionEdit', 'usersManage', 'medalEdit', 'sheetSync', 'dataBackup', 'dataReset'];
-const BUILTIN = ['admin', 'user', 'pending'];
+const BUILTIN = ['admin', 'pending']; // rôles indispensables (« Utilisateur » est un rôle ordinaire, supprimable)
 const DISTRICTS = ['mr', 'vesp', 'alta', 'sandy', 'rox']; // Mission Row, Vespucci, Alta, Sandy Shore, Roxwood : données séparées
 const JF = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE;
 
@@ -50,7 +50,7 @@ function secret() {
 function default_roles() {
   return [
     (object)['id' => 'admin', 'name' => 'Administrateur', 'admin' => true, 'builtin' => true, 'tabs' => array_slice(TABS, 0, 6), 'perms' => PERMS],
-    (object)['id' => 'user', 'name' => 'Utilisateur', 'builtin' => true, 'tabs' => array_slice(TABS, 0, 6), 'perms' => ['agentAdd', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'dataBackup']],
+    (object)['id' => 'user', 'name' => 'Utilisateur', 'builtin' => false, 'tabs' => array_slice(TABS, 0, 6), 'perms' => ['agentAdd', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'dataBackup']],
     (object)['id' => 'pending', 'name' => 'En attente', 'builtin' => true, 'tabs' => [], 'perms' => []]];
 }
 
@@ -69,7 +69,9 @@ function db_open() {
   if (!isset($d->states) || !is_object($d->states)) $d->states = (object)[];
   if (!isset($d->svs) || !is_object($d->svs)) $d->svs = (object)[];
   if (!is_array($d->roles)) $d->roles = [];
-  foreach (default_roles() as $i => $r) { $has = false; foreach ($d->roles as $x) if ($x->id === $r->id) $has = true; if (!$has) array_splice($d->roles, min($i, count($d->roles)), 0, [$r]); }
+  if (!count($d->roles)) $d->roles = default_roles(); // base neuve : rôles de départ
+  foreach (default_roles() as $r) { if (!in_array($r->id, BUILTIN, true)) continue; $has = false; foreach ($d->roles as $x) if ($x->id === $r->id) $has = true; if (!$has) $d->roles[] = $r; }
+  foreach ($d->roles as $x) $x->builtin = in_array($x->id, BUILTIN, true);
   if (($d->pv ?? 1) < 2) { // nouvelles permissions : accordées aux rôles qui avaient déjà l'accès équivalent
     foreach ($d->roles as $r) {
       if (!empty($r->admin)) { $r->perms = PERMS; continue; }
@@ -135,7 +137,7 @@ function check_pwd($u, $pwd) {
   return false; // ancien mot de passe créé par server.js (scrypt) : à redéfinir par un administrateur
 }
 function find_role($id) { global $db; foreach ($db->roles as $r) if ($r->id === $id) return $r; return null; }
-function role_of($u) { return find_role($u->role ?? '') ?: find_role('user'); }
+function role_of($u) { return find_role($u->role ?? '') ?: find_role('pending'); } // rôle supprimé : aucun accès
 function is_admin($u) { return !empty(role_of($u)->admin); }
 function perms_of($u) { return (array)(role_of($u)->perms ?? []); }
 function can_read($u) { $r = role_of($u); return !empty($r->admin) || count((array)$r->tabs) > 0 || count((array)$r->perms) > 0; }

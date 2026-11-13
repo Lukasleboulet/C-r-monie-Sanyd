@@ -556,7 +556,7 @@ const PERM_GROUPS = [
 const PERMS = PERM_GROUPS.flatMap(g => g[1]);
 let pwdOn = true, roles = [], users = [], firstRun = false, discordOn = false, redirUrl = '', dcMsg = '';
 let SV = 0, VV = 0, S0 = null, saving = false, dirty = false, saveTimer = null, needRender = false;
-const roleOf = u => roles.find(r => r.id === u.role) || roles.find(r => r.id === 'user') || { name: '?', tabs: [], perms: [] };
+const roleOf = u => roles.find(r => r.id === u.role) || roles.find(r => r.id === 'pending') || { name: '?', tabs: [], perms: [] };
 const canTab = t => !!me && !!t && (t === 'acc' || myD.length > 0) && (t === 'acc' ? admin || can('usersManage') : t === 'mda' ? can('medalEdit') || can('sheetSync') : admin || (roleOf(me).tabs || []).includes(t)); // acc / mda : selon les permissions
 const can = p => !!me && (admin || (roleOf(me).perms || []).includes(p)); // permissions fines (voir « Rôles et accès »)
 const clone = x => JSON.parse(JSON.stringify(x));
@@ -732,7 +732,7 @@ function usersPanel() {
   <section class="panel"><h2>Comptes utilisateurs <span class="note">(${users.length - pend.length})</span></h2><p class="note">Les comptes sont enregistrés sur le serveur et partagés entre tous les ordinateurs. Le rôle de chaque compte détermine les onglets et les actions autorisés (voir « Rôles et accès »).</p>
   ${admin ? `<p class="note">Connexion Discord : <b>${discordOn ? 'configurée' : 'non configurée'}</b> · URL de redirection à enregistrer dans le portail Discord : <code class="mono">${esc(redirUrl)}</code></p>` : ''}<p class="note">Quand quelqu’un se connecte avec Discord pour la première fois, son compte apparaît ci-dessous avec le rôle « En attente » et son pseudo Discord : choisis-lui son rôle, puis clique sur le logo de son district pour lui en donner l’accès (clique à nouveau pour le retirer). Tu peux aussi créer son compte à l’avance avec son ID Discord.</p>` +
     (users.filter(u => u.role !== 'pending').map(row).join('') || '<p class="note">Aucun compte.</p>') +
-    `<div class="frm"><input id="nu" placeholder="Identifiant" autocomplete="off"><input id="nd" placeholder="ID Discord${pwdOn ? ' (optionnel)' : ''}" autocomplete="off">${pwdOn ? '<input id="np" type="password" placeholder="Mot de passe (facultatif avec Discord)" autocomplete="new-password">' : ''}<select id="nr">${ro('user')}</select><select id="ndis" title="District du compte">${myD.map(d => `<option value="${d}" ${d === curD ? 'selected' : ''}>${dName(d)}</option>`).join('')}</select><button class="btn gold" data-a="uadd">Créer le compte</button></div></section>`;
+    `<div class="frm"><input id="nu" placeholder="Identifiant" autocomplete="off"><input id="nd" placeholder="ID Discord${pwdOn ? ' (optionnel)' : ''}" autocomplete="off">${pwdOn ? '<input id="np" type="password" placeholder="Mot de passe (facultatif avec Discord)" autocomplete="new-password">' : ''}<select id="nr">${ro((okRoles.find(r => !r.admin && r.id !== 'pending') || okRoles.find(r => r.id === 'pending') || {}).id)}</select><select id="ndis" title="District du compte">${myD.map(d => `<option value="${d}" ${d === curD ? 'selected' : ''}>${dName(d)}</option>`).join('')}</select><button class="btn gold" data-a="uadd">Créer le compte</button></div></section>`;
 }
 
 // ---------- médailles, rubans de service & synchronisation Google Sheet ----------

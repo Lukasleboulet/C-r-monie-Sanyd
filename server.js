@@ -21,18 +21,20 @@ try { SECRET = fs.readFileSync(SKF, 'utf8'); } catch (e) { SECRET = crypto.rando
 
 const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set'];
 const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'cerEditDone', 'gradeEdit', 'actionEdit', 'sanctionEdit', 'usersManage', 'medalEdit', 'sheetSync', 'dataBackup', 'dataReset'];
-const BUILTIN = ['admin', 'user', 'pending'];
+const BUILTIN = ['admin', 'pending']; // rôles indispensables (« Utilisateur » est un rôle ordinaire, supprimable)
 const defaultRoles = () => [
   { id: 'admin', name: 'Administrateur', admin: true, builtin: true, tabs: TABS.slice(0, 6), perms: [...PERMS] },
-  { id: 'user', name: 'Utilisateur', builtin: true, tabs: TABS.slice(0, 6), perms: ['agentAdd', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'dataBackup'] },
+  { id: 'user', name: 'Utilisateur', builtin: false, tabs: TABS.slice(0, 6), perms: ['agentAdd', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'dataBackup'] },
   { id: 'pending', name: 'En attente', builtin: true, tabs: [], perms: [] }];
 const DISTRICTS = ['mr', 'vesp', 'alta', 'sandy', 'rox']; // Mission Row, Vespucci, Alta, Sandy Shore, Roxwood : données séparées
-let db = { v: 1, states: {}, svs: {}, users: [], roles: defaultRoles() };
+let db = { v: 1, states: {}, svs: {}, users: [], roles: [] };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DBF, 'utf8')) }; }
 catch (e) { // reprise d'une base venant de l'hébergement PHP (data/db.php)
   try { const t = fs.readFileSync(path.join(DATA, 'db.php'), 'utf8'), i = t.indexOf('?>'); db = { ...db, ...JSON.parse(i >= 0 ? t.slice(i + 2) : t) }; console.log('  Base importée depuis data/db.php'); } catch (x) {}
 }
-defaultRoles().forEach((d, i) => { if (!db.roles.some(r => r.id === d.id)) db.roles.splice(Math.min(i, db.roles.length), 0, d); });
+if (!db.roles.length) db.roles = defaultRoles(); // base neuve : rôles de départ
+defaultRoles().filter(d => BUILTIN.includes(d.id)).forEach(d => { if (!db.roles.some(r => r.id === d.id)) db.roles.push(d); }); // rôles indispensables toujours présents
+db.roles.forEach(r => { r.builtin = BUILTIN.includes(r.id); });
 const pv0 = db.pv || 1;
 if ((db.pv || 1) < 2) { // nouvelles permissions : on les accorde aux rôles qui avaient déjà l'accès équivalent
   db.roles.forEach(r => { if (r.admin) { r.perms = [...PERMS]; return; } r.perms = r.perms || [];
@@ -81,7 +83,7 @@ const readBody = req => new Promise((ok, no) => {
 const setPwd = (u, pwd) => { u.salt = crypto.randomBytes(16).toString('hex'); u.hash = crypto.scryptSync(pwd, u.salt, 64).toString('hex'); };
 const checkPwd = (u, pwd) => { if (!u.hash) return false; const h = crypto.scryptSync(String(pwd), u.salt, 64); return crypto.timingSafeEqual(h, Buffer.from(u.hash, 'hex')); };
 
-const roleOf = u => db.roles.find(r => r.id === u.role) || db.roles.find(r => r.id === 'user');
+const roleOf = u => db.roles.find(r => r.id === u.role) || db.roles.find(r => r.id === 'pending'); // rôle supprimé : aucun accès
 const isAdmin = u => !!roleOf(u).admin;
 const canRead = u => { const r = roleOf(u); return !!r.admin || r.tabs.length > 0 || r.perms.length > 0; };
 const canWrite = u => { const r = roleOf(u); return !!r.admin || r.perms.length > 0 || r.tabs.some(t => ['eff', 'hrs', 'imp', 'cer', 'set'].includes(t)); };
