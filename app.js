@@ -1036,22 +1036,6 @@ addEventListener('scroll', e => { if (csPop && !csPop.contains(e.target)) csClos
 addEventListener('resize', csClose);
 new MutationObserver(() => { csEnhance(); if (csCur && !document.contains(csCur.sel)) csClose(); }).observe(document.body, { childList: true, subtree: true });
 csEnhance();
-(() => { // écran de démarrage MathOS (non ignorable)
-  const b = $('#boot'); if (!b) return;
-  const L = ['Initialisation du noyau MathOS', 'Chargement du terminal MDT-07', 'Connexion au réseau SAMP', 'Synchronisation des effectifs', 'Vérification des accès', 'Terminal prêt'];
-  const log = $('#blog'), bar = $('#bbar'), stp = $('#bstep'), pct = $('#bpct'); let i = 0, t;
-  const lock = [...document.querySelectorAll('.app, #login, #dm')]; lock.forEach(x => x.inert = true); // rien n'est accessible pendant le chargement
-  const finish = () => { lock.forEach(x => x.inert = false); b.classList.add('out'); setTimeout(() => b.remove(), 650); if (!$('#login').hidden && !$('#lu').closest('[hidden]')) $('#lu').focus(); };
-  const hh = () => new Date().toLocaleTimeString('fr-FR');
-  const step = () => {
-    if (i >= L.length) { stp.textContent = 'Bienvenue'; t = setTimeout(finish, 420); return; }
-    log.querySelector('.cur')?.classList.remove('cur');
-    log.insertAdjacentHTML('beforeend', `<div class="bl cur"><time>${hh()}</time><span class="ok">OK</span>${L[i]}</div>`);
-    const p = Math.round(++i / L.length * 100); bar.style.width = p + '%'; pct.textContent = p + ' %'; stp.textContent = L[i] ? L[i] + '…' : 'Terminal prêt';
-    t = setTimeout(step, 330);
-  };
-  t = setTimeout(step, 450);
-})();
 // mode clair / sombre (classe « light » sur <html>, mémorisée ; le script du <head> l'applique avant l'affichage)
 const MKEY = KEY + '-mode'; let mode = 'dark'; try { mode = localStorage.getItem(MKEY) === 'light' ? 'light' : 'dark'; } catch (e) {}
 const applyMode = () => { document.documentElement.classList.toggle('light', mode === 'light'); $('#mode').title = mode === 'light' ? 'Passer en mode sombre' : 'Passer en mode clair'; };
