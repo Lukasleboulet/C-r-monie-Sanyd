@@ -62,7 +62,7 @@ Cinq districts, chacun avec **ses propres données** (agents, heures, cérémoni
 - Les données d'avant cette mise à jour sont devenues celles de **Sandy Shore**, et les comptes existants ont reçu Sandy Shore.
 
 ## Cérémonie : qui voit quoi
-Sans la permission **« Voir tous les grades »** (Administration › Accès & comptes › Permissions › Cérémonie), un compte ne voit dans la cérémonie (tableau, récap, validation) **que les agents de son grade et en dessous** : un SLO ne voit pas les Sergent-1 et plus. Le grade du compte est celui de sa fiche agent dans le district, reliée par l'**ID Discord** (colonne « ID discord » du Google Sheet). Un compte sans fiche agent reliée ne voit pas la cérémonie. Les administrateurs voient tout.
+Sans la permission **« Voir tous les grades »** (Administration › Accès & comptes › Permissions › Cérémonie), un compte ne voit dans l'onglet Cérémonie (tableau, récap, validation) **que les agents de son grade et en dessous** (les autres onglets ne sont pas concernés) : un SLO ne voit pas les Sergent-1 et plus. Le grade du compte est celui de sa fiche agent dans le district, reliée par l'**ID Discord** (colonne « ID discord » du Google Sheet). Un compte sans fiche agent reliée ne voit pas la cérémonie. Les administrateurs voient tout.
 
 ## Rôles et permissions (Administration › Accès & comptes — administrateurs)
 - **Onglets accessibles** par rôle : Effectifs, Heures, Importer, Cérémonie, Statistiques, Paramètres (grades, options de décision, sanctions).

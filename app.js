@@ -1019,7 +1019,7 @@ function staDetail(a) {
   const k = s.k, trend = k.length >= 6 ? k.slice(-3).reduce((x, y) => x + y, 0) / 3 - k.slice(-6, -3).reduce((x, y) => x + y, 0) / 3 : null;
   const big = (l, v, sub, cls = '') => `<div class="sk big ${cls}"><span>${l}</span><b>${v}</b>${sub ? `<em>${sub}</em>` : ''}</div>`;
   const card = (l, v, cls = '') => `<div class="sk ${cls}" title="${esc(l)}"><span>${l}</span><b>${v}</b></div>`;
-  const seeC = canSeeCer(a), hist = gradeHistory(a).filter(h => seeC || h.st !== 'prevu'), n0 = t - f + 1;
+  const hist = gradeHistory(a), n0 = t - f + 1;
   const cer = S.weeks.map((wk, j) => ({ wk, j, d: S.ceremonies[wk]?.[a.id] })).filter(o => o.d && (o.d.a || o.d.sanction || o.d.casiers || o.d.fps || o.d.f1020 || o.d.fus || o.d.abs || o.d.r || o.d.notes));
   const yes = v => v ? '<span class="ok">✓</span>' : '<span class="note">—</span>', nS = cer.filter(o => o.d.sanction).length, nA = cer.filter(o => o.d.abs).length;
   const wk = [...Array(n0).keys()].map(i => f + i).reverse();
@@ -1036,8 +1036,8 @@ function staDetail(a) {
   <section class="panel"><div class="ph"><h2>Détail par semaine</h2></div><div class="wrapt"><table><thead><tr><th>Semaine</th><th>Heures</th><th>Écart moy.</th><th></th></tr></thead><tbody>` +
     wk.map(i => { const v = a.w[i], d = v == null || !s.n ? null : v - s.avg; return `<tr><td>${S.weeks[i]}</td><td class="hcell">${F(v)}</td><td class="hcell ${d == null ? '' : d >= 0 ? 'pos' : 'neg'}">${d == null ? '—' : Fd(d)}</td><td><span class="mini"><i style="width:${Math.min(100, (v || 0) / BAR_MAX * 100)}%"></i></span></td></tr>`; }).join('') + `</tbody></table></div></section>
   </div>
-  ${seeC ? '' : '<!--'}<section class="panel"><div class="ph"><h2>Cérémonies & suivi</h2><span class="note">${cer.length} cérémonie(s) · ${nS} sanction(s) · ${nA} absence(s)</span></div>${cer.length ? `<div class="wrapt"><table><thead><tr><th>Semaine</th><th>Décision</th><th>Sanction</th><th>Casiers</th><th>Forma PS</th><th>Forma 10-20</th><th>Fusillade</th><th>Absence</th><th>Explication</th><th>Notes</th></tr></thead><tbody>` +
-    cer.map(o => { const d = o.d, x = S.actions.find(y => y.id === d.a); return `<tr><td>${o.wk}</td><td>${x ? `${sym(x)} ${esc(x.label)}${d.g ? ` → ${esc(d.g)}` : ''}${d.done ? '' : ' <span class="note">(prévu)</span>'}` : '—'}</td><td>${esc(d.sanction || '—')}</td><td>${esc(d.casiers ?? '—')}</td><td>${yes(d.fps)}</td><td>${yes(d.f1020)}</td><td>${yes(d.fus)}</td><td>${yes(d.abs)}</td><td>${esc(d.r || '—')}</td><td>${esc(d.notes || '—')}</td></tr>`; }).join('') + `</tbody></table></div>` : '<p class="note">Aucune cérémonie avec des données pour cet agent.</p>'}</section>${seeC ? '' : '-->'}`;
+  <section class="panel"><div class="ph"><h2>Cérémonies & suivi</h2><span class="note">${cer.length} cérémonie(s) · ${nS} sanction(s) · ${nA} absence(s)</span></div>${cer.length ? `<div class="wrapt"><table><thead><tr><th>Semaine</th><th>Décision</th><th>Sanction</th><th>Casiers</th><th>Forma PS</th><th>Forma 10-20</th><th>Fusillade</th><th>Absence</th><th>Explication</th><th>Notes</th></tr></thead><tbody>` +
+    cer.map(o => { const d = o.d, x = S.actions.find(y => y.id === d.a); return `<tr><td>${o.wk}</td><td>${x ? `${sym(x)} ${esc(x.label)}${d.g ? ` → ${esc(d.g)}` : ''}${d.done ? '' : ' <span class="note">(prévu)</span>'}` : '—'}</td><td>${esc(d.sanction || '—')}</td><td>${esc(d.casiers ?? '—')}</td><td>${yes(d.fps)}</td><td>${yes(d.f1020)}</td><td>${yes(d.fus)}</td><td>${yes(d.abs)}</td><td>${esc(d.r || '—')}</td><td>${esc(d.notes || '—')}</td></tr>`; }).join('') + `</tbody></table></div>` : '<p class="note">Aucune cérémonie avec des données pour cet agent.</p>'}</section>`;
 }
 function vSta() {
   if (st.id && !S.agents.some(a => a.id === st.id && !hiddenA(a))) st.id = null;
