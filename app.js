@@ -1039,13 +1039,16 @@ csEnhance();
 (() => { // écran de démarrage MathOS (non ignorable)
   const b = $('#boot'); if (!b) return;
   const L = ['Initialisation du noyau MathOS', 'Chargement du terminal MDT-07', 'Connexion au réseau SAMP', 'Synchronisation des effectifs', 'Vérification des accès', 'Terminal prêt'];
-  const log = $('#blog'), bar = $('#bbar'); let i = 0, t;
+  const log = $('#blog'), bar = $('#bbar'), stp = $('#bstep'), pct = $('#bpct'); let i = 0, t;
   const lock = [...document.querySelectorAll('.app, #login, #dm')]; lock.forEach(x => x.inert = true); // rien n'est accessible pendant le chargement
-  const finish = () => { lock.forEach(x => x.inert = false); b.classList.add('out'); setTimeout(() => b.remove(), 600); if (!$('#login').hidden) $('#lu').focus(); };
+  const finish = () => { lock.forEach(x => x.inert = false); b.classList.add('out'); setTimeout(() => b.remove(), 650); if (!$('#login').hidden && !$('#lu').closest('[hidden]')) $('#lu').focus(); };
+  const hh = () => new Date().toLocaleTimeString('fr-FR');
   const step = () => {
-    if (i >= L.length) { t = setTimeout(finish, 350); return; }
-    log.insertAdjacentHTML('beforeend', `<div><span class="ok">[ OK ]</span>${L[i]}</div>`);
-    bar.style.width = (++i / L.length * 100) + '%'; t = setTimeout(step, 340);
+    if (i >= L.length) { stp.textContent = 'Bienvenue'; t = setTimeout(finish, 420); return; }
+    log.querySelector('.cur')?.classList.remove('cur');
+    log.insertAdjacentHTML('beforeend', `<div class="bl cur"><time>${hh()}</time><span class="ok">OK</span>${L[i]}</div>`);
+    const p = Math.round(++i / L.length * 100); bar.style.width = p + '%'; pct.textContent = p + ' %'; stp.textContent = L[i] ? L[i] + '…' : 'Terminal prêt';
+    t = setTimeout(step, 330);
   };
   t = setTimeout(step, 450);
 })();

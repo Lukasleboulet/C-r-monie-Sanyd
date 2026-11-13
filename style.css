@@ -459,3 +459,40 @@ html.light .hbar{background:rgba(150,100,50,.15)}html.light .hbar em{background:
 #dm.modal{z-index:300} /* les messages s’affichent aussi au-dessus de la page de connexion */
 .mtg{display:inline-flex;padding:2px;border:0;border-radius:6px;background:none;cursor:pointer;transition:.15s}.mtg:hover{background:rgba(240,138,60,.18);transform:translateY(-1px)}.mtg:focus-visible{outline:2px solid var(--acc)}
 .cer select[data-a="act"],.cer select[data-a="ng"]{width:116px}.cer input[data-a="why"],.cer input[data-k="notes"]{min-width:66px}.cer td.hc{min-width:42px}
+
+/* ---------- écran de démarrage (refonte) ---------- */
+#boot{background:radial-gradient(1000px 620px at 50% 34%,rgba(240,138,60,.26),transparent 62%),radial-gradient(1400px 900px at 50% 50%,transparent 55%,rgba(0,0,0,.55)),var(--bg);overflow:hidden}
+.bgrid{position:absolute;inset:-50%;background:linear-gradient(rgba(255,190,120,.05) 1px,transparent 1px) 0 0/48px 48px,linear-gradient(90deg,rgba(255,190,120,.05) 1px,transparent 1px) 0 0/48px 48px;transform:perspective(900px) rotateX(58deg) translateY(10%);mask-image:radial-gradient(ellipse at 50% 40%,#000 25%,transparent 70%);animation:bgr 18s linear infinite}
+@keyframes bgr{to{background-position:0 48px,48px 0}}
+.bscan{position:absolute;left:0;right:0;height:180px;top:-180px;background:linear-gradient(180deg,transparent,rgba(240,138,60,.07),transparent);animation:bsc 4.5s ease-in-out infinite;pointer-events:none}
+@keyframes bsc{to{top:100%}}
+.blights{height:2px;animation:none;background:linear-gradient(90deg,transparent,var(--acc) 20%,var(--acc2) 50%,var(--acc) 80%,transparent);box-shadow:0 0 18px rgba(240,138,60,.5)}
+.bwrap{position:relative;width:min(520px,90vw)}
+.bring{width:168px;height:168px;margin:0 auto 22px}
+.bring::before{border-width:2px;border-top-color:var(--acc);border-right-color:rgba(240,138,60,.25)}
+.bring::after{inset:14px;border-bottom-color:var(--sand);border-left-color:rgba(232,195,140,.2)}
+.bradar{position:absolute;inset:6px;border-radius:50%;background:conic-gradient(from 0deg,rgba(240,138,60,.32),transparent 28%);animation:spin 2.8s linear infinite;mask:radial-gradient(circle,transparent 46%,#000 47%)}
+.bdot{position:absolute;inset:-6px;border-radius:50%;border:1px dashed rgba(232,195,140,.18);animation:spin 30s linear infinite}
+.bring img{position:relative;width:104px;height:104px;border-radius:50%;filter:drop-shadow(0 6px 24px rgba(240,138,60,.65))}
+.bname{font:800 4.2rem Inter,system-ui,sans-serif;letter-spacing:-.01em;background:linear-gradient(180deg,#fff7ea,#e9d3b2);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
+.bname b{background:linear-gradient(180deg,var(--acc2),var(--acc));-webkit-background-clip:text;background-clip:text;color:transparent}
+.bsub{margin:12px 0 0;font:700 .95rem "Barlow Condensed",Inter,sans-serif;letter-spacing:.3em;color:var(--fg);white-space:nowrap}
+.bsub2{display:flex;align-items:center;justify-content:center;gap:10px;margin:6px 0 28px;font:600 .66rem var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--sand);white-space:nowrap}
+.bsub2 i{width:4px;height:4px;border-radius:50%;background:var(--acc)}
+.bprog{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;font:500 .74rem var(--mono);color:var(--mute)}
+.bprog b{color:var(--acc2);font-weight:700}
+.bbarw{height:5px}
+.blog{min-height:140px;margin-top:18px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.25);font:11.5px/1.85 var(--mono)}
+.bl{display:flex;align-items:center;gap:10px;animation:bli .28s ease both}
+.bl time{color:#6e5a3e}
+.bl .ok{margin:0;padding:0 6px;border-radius:4px;background:rgba(61,220,151,.14);color:var(--green);font-weight:700;font-size:.66rem;letter-spacing:.08em}
+.bl.cur::after{content:"";width:7px;height:13px;background:var(--acc2);animation:blk .8s steps(1) infinite}
+@keyframes bli{from{opacity:0;transform:translateX(-6px)}}
+@keyframes blk{50%{opacity:0}}
+.bfoot{display:flex;align-items:center;justify-content:center;gap:8px}
+.bfoot svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2}
+.lkick{margin:-4px 0 6px;font:600 .64rem var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--acc2)}
+html.light .bname{background:linear-gradient(180deg,#3a2815,#6b4a2a);-webkit-background-clip:text;background-clip:text}
+html.light .blog{background:rgba(255,250,241,.6)}html.light .bsub{color:#3a2815}
+@media(max-width:560px){.bname{font-size:3rem}.bsub{font-size:.8rem;letter-spacing:.18em;white-space:normal}.bsub2{white-space:normal;flex-wrap:wrap}}
+.lkick{letter-spacing:.14em;white-space:nowrap}
