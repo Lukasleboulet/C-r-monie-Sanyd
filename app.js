@@ -584,6 +584,15 @@ const PERM_GROUPS = [
   ['Médailles', [['medalEdit', 'Gérer / remettre'], ['sheetSync', 'Synchro Google Sheet']]],
   ['Données', [['dataBackup', 'Sauvegarde'], ['dataReset', 'Restaurer / réinit.']]]];
 const PERMS = PERM_GROUPS.flatMap(g => g[1]);
+const PERM_DESC = { // petit descriptif affiché sous chaque permission (Accès & comptes › Permissions)
+  agentAdd: 'Ajouter un agent dans Effectifs.', agentEdit: 'Changer le matricule, le nom ou le grade d’un agent.', agentDel: 'Archiver un agent, le réintégrer ou le supprimer définitivement.',
+  hoursEdit: 'Saisir ou corriger les heures dans l’onglet Heures.', hoursImport: 'Coller le tableau d’heures dans l’onglet Importer.', weekAdd: 'Créer une nouvelle semaine.',
+  cerEdit: 'Choisir les décisions, sanctions, formations et notes de la cérémonie.', cerValidate: 'Appliquer les changements de grade de la cérémonie.', cerEditDone: 'Modifier une décision déjà appliquée.',
+  cerAll: 'Voir tous les agents dans l’onglet Cérémonie. Sans cette case : seulement les agents de son grade et en dessous (grade lu via l’ID Discord du compte).',
+  gradeEdit: 'Ajouter, renommer, ordonner les grades et les rangs masqués.', actionEdit: 'Gérer les options de décision (« Passe … »).', sanctionEdit: 'Gérer la liste des sanctions.',
+  usersManage: 'Valider les demandes d’accès et gérer les comptes de ses districts (sauf administrateurs).',
+  medalEdit: 'Gérer les médailles, attribuer et marquer les rubans comme remis.', sheetSync: 'Lancer la synchronisation avec le Google Sheet.',
+  dataBackup: 'Télécharger une sauvegarde des données.', dataReset: 'Restaurer une sauvegarde ou tout réinitialiser.' };
 let pwdOn = true, roles = [], users = [], firstRun = false, discordOn = false, redirUrl = '', dcMsg = '';
 let SV = 0, VV = 0, S0 = null, saving = false, dirty = false, saveTimer = null, needRender = false;
 const roleOf = u => roles.find(r => r.id === u.role) || roles.find(r => r.id === 'pending') || { name: '?', tabs: [], perms: [] };
@@ -742,7 +751,7 @@ function rolesPanel() {
       `<td>${r.builtin ? '' : `<button class="btn del" data-a="rdel" data-id="${r.id}">Retirer</button>`}</td></tr>`).join('') +
     `</tbody></table></div>
   <h3 class="sub">Permissions (actions)</h3><div class="wrapt"><table class="ptab2"><thead><tr><th>Permission</th>${roles.map(r => `<th class="rc">${esc(r.name)}${r.admin ? '' : `<button class="btn ghost mini-b" data-a="rall" data-id="${r.id}" title="Tout cocher / tout décocher">tout</button>`}</th>`).join('')}</tr></thead><tbody>` +
-    PERM_GROUPS.map(([g, L]) => `<tr class="pgr"><td colspan="${roles.length + 1}">${g}</td></tr>` + L.map(([k, l]) => `<tr><td class="pl">${l}</td>` + roles.map(r => box(`data-a="rperm" data-id="${r.id}" data-k="${k}"`, r.admin || (r.perms || []).includes(k), r.admin)).join('') + '</tr>').join('')).join('') +
+    PERM_GROUPS.map(([g, L]) => `<tr class="pgr"><td colspan="${roles.length + 1}">${g}</td></tr>` + L.map(([k, l]) => `<tr><td class="pl">${l}${PERM_DESC[k] ? `<small class="pd">${PERM_DESC[k]}</small>` : ''}</td>` + roles.map(r => box(`data-a="rperm" data-id="${r.id}" data-k="${k}"`, r.admin || (r.perms || []).includes(k), r.admin)).join('') + '</tr>').join('')).join('') +
     `</tbody></table></div><div class="frm" style="margin-top:12px"><input id="rnew" placeholder="Nom du nouveau rôle (ex : Superviseur)"><button class="btn gold" data-a="radd">Ajouter le rôle</button></div></section>`;
 }
 const avHtml = u => u.discordId && u.avatar ? `<span class="av img" style="background-image:url(https://cdn.discordapp.com/avatars/${esc(u.discordId)}/${esc(u.avatar)}.png?size=64)"></span>` : `<span class="av">${esc(u.name.slice(0, 2))}</span>`;
