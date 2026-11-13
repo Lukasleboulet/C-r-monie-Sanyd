@@ -18,13 +18,13 @@ function route() {
   $r = trim((string)($_GET['r'] ?? ''), '/'); $seg = $r === '' ? [] : explode('/', $r);
   $u = authed(); $b = in_array($m, ['POST', 'PUT', 'PATCH', 'DELETE']) ? body() : (object)[];
 
-  if ($m === 'GET' && $r === 'boot') return out(200, $u ? payload($u) : flags() + ['me' => null, 'firstRun' => !count($db->users)]);
+  if ($m === 'GET' && $r === 'boot') return out(200, $u ? payload($u, $_GET['d'] ?? null) : flags() + ['me' => null, 'firstRun' => !count($db->users)]);
   if (!pwd_on() && $m === 'POST' && in_array($r, ['setup', 'login'])) return out(403, ['error' => 'Connexion uniquement avec Discord.']);
   if ($m === 'POST' && $r === 'setup') {
     if (count($db->users)) return out(403, ['error' => 'Un compte existe déjà.']);
     $name = trim((string)($b->name ?? '')); $err = name_err($name) ?: pwd_err($b->password ?? null);
     if ($err) return out(400, ['error' => $err]);
-    $nu = (object)['id' => uid(), 'name' => $name, 'role' => 'admin', 'created' => round(microtime(true) * 1000)]; set_pwd($nu, $b->password);
+    $nu = (object)['id' => uid(), 'name' => $name, 'role' => 'admin', 'districts' => DISTRICTS, 'created' => round(microtime(true) * 1000)]; set_pwd($nu, $b->password);
     $db->users[] = $nu; touch_db(); login_user($nu, !empty($b->remember));
     return out(200, payload($nu));
   }
@@ -41,13 +41,14 @@ function route() {
   if ($m === 'POST' && $r === 'logout') { set_cookie('sid', '', -1); return out(200, ['ok' => true]); }
   if (!$u) return out(401, ['error' => 'Non connecté']);
 
-  if ($m === 'GET' && $r === 'sync') return out(200, (string)$db->v === (string)($_GET['v'] ?? '') ? ['same' => true, 'v' => $db->v] : payload($u));
+  if ($m === 'GET' && $r === 'sync') return out(200, (string)$db->v === (string)($_GET['v'] ?? '') ? ['same' => true, 'v' => $db->v] : payload($u, $_GET['d'] ?? null));
   if ($m === 'PUT' && $r === 'state') {
     if (!can_write($u)) return out(403, ['error' => 'Droits insuffisants']);
     $s = $b->state ?? null;
     if (!is_object($s) || !is_array($s->agents ?? null) || !is_array($s->weeks ?? null)) return out(400, ['error' => 'Données invalides']);
-    if (($b->base ?? null) !== $db->sv) return out(409, ['state' => $db->state, 'sv' => $db->sv, 'v' => $db->v]);
-    $db->state = $s; $db->sv++; touch_db(); return out(200, ['sv' => $db->sv, 'v' => $db->v]);
+    $d = (string)($b->d ?? ''); if (!in_array($d, d_of($u), true)) return out(403, ['error' => 'District non autorisé pour ton compte.']);
+    if (($b->base ?? null) !== sv_of($d)) return out(409, ['state' => $db->states->$d ?? null, 'sv' => sv_of($d), 'v' => $db->v, 'd' => $d]);
+    $db->states->$d = $s; $db->svs->$d = sv_of($d) + 1; touch_db(); return out(200, ['sv' => sv_of($d), 'v' => $db->v, 'd' => $d]);
   }
   if ($m === 'GET' && $r === 'sheet') { // lecture d'un Google Sheet (CSV) côté serveur
     if (!is_admin($u) && !in_array('sheetSync', perms_of($u))) return out(403, ['error' => 'Droits insuffisants']);
@@ -70,18 +71,20 @@ function route() {
   if (!can_manage($u)) return out(403, ['error' => 'Réservé aux administrateurs']);
   $adm = is_admin($u);
   $roleOk = function ($id) use ($adm) { $r = find_role((string)$id); return $r && ($adm || empty($r->admin)); };
+  $mine = d_of($u); // un gestionnaire ne donne / retire que ses propres districts
+  $mergeD = function ($old, $req) use ($mine) { $keep = array_diff((array)$old, $mine); $add = array_intersect(is_array($req) ? $req : [], $mine, DISTRICTS); return array_values(array_unique(array_merge($keep, $add))); };
 
   if ($m === 'POST' && $r === 'users') {
     $name = trim((string)($b->name ?? '')); $pwd = pwd_on() ? (string)($b->password ?? '') : ''; $did = trim((string)($b->discordId ?? ''));
     if (!pwd_on() && $did === '') return out(400, ['error' => 'Connexion uniquement avec Discord : renseigne l’ID Discord du compte.']);
     $err = name_err($name) ?: did_err($did) ?: (($pwd !== '' || $did === '') ? pwd_err($pwd) : '') ?: ($roleOk($b->role ?? '') ? '' : 'Rôle inconnu ou non autorisé.');
     if ($err) return out(400, ['error' => $err]);
-    $nu = (object)['id' => uid(), 'name' => $name, 'role' => $b->role, 'created' => round(microtime(true) * 1000)];
+    $nu = (object)['id' => uid(), 'name' => $name, 'role' => $b->role, 'districts' => $mergeD([], $b->districts ?? []), 'created' => round(microtime(true) * 1000)];
     if ($did !== '') $nu->discordId = $did; if ($pwd !== '') set_pwd($nu, $pwd);
-    $db->users[] = $nu; touch_db(); return out(200, admin_view());
+    $db->users[] = $nu; touch_db(); return out(200, admin_view($u));
   }
   if (($seg[0] ?? '') === 'users' && isset($seg[1])) {
-    $t = find_user($seg[1]); if (!$t) return out(404, ['error' => 'Compte introuvable']);
+    $t = find_user($seg[1]); if (!$t || !sees_user($u, $t)) return out(404, ['error' => 'Compte introuvable']);
     if (!$adm && is_admin($t)) return out(403, ['error' => 'Seul un administrateur peut modifier un compte administrateur.']);
     $admins = function () { global $db; return count(array_filter($db->users, 'is_admin')); };
     if ($m === 'PATCH' && count($seg) === 2) {
@@ -90,29 +93,30 @@ function route() {
         if (is_admin($t) && empty(find_role($b->role)->admin) && $admins() < 2) return out(400, ['error' => 'Il doit rester au moins un administrateur.']);
         $t->role = $b->role;
       }
+      if (property_exists($b, 'districts')) $t->districts = $mergeD($t->districts ?? [], $b->districts);
       if (property_exists($b, 'discordId')) {
         $d = trim((string)$b->discordId);
         $err = did_err($d, $t->id) ?: (($d === '' && (empty($t->hash) || !pwd_on())) ? 'Ce compte n’a pas de mot de passe : garde son ID Discord ou définis-lui un mot de passe.' : '');
         if ($err) return out(400, ['error' => $err]);
         if ($d !== '') $t->discordId = $d; else unset($t->discordId);
       }
-      touch_db(); return out(200, admin_view());
+      touch_db(); return out(200, admin_view($u));
     }
     if ($m === 'DELETE' && count($seg) === 2) {
       if ($t->id === $u->id) return out(400, ['error' => 'Tu ne peux pas supprimer ton propre compte.']);
       if (is_admin($t) && $admins() < 2) return out(400, ['error' => 'Il doit rester au moins un administrateur.']);
-      $db->users = array_values(array_filter($db->users, fn($x) => $x !== $t)); touch_db(); return out(200, admin_view());
+      $db->users = array_values(array_filter($db->users, fn($x) => $x !== $t)); touch_db(); return out(200, admin_view($u));
     }
     if ($m === 'POST' && ($seg[2] ?? '') === 'password') {
       if (!pwd_on()) return out(403, ['error' => 'Connexion uniquement avec Discord : pas de mot de passe.']);
       $err = pwd_err($b->password ?? null); if ($err) return out(400, ['error' => $err]);
-      set_pwd($t, $b->password); touch_db(); return out(200, admin_view());
+      set_pwd($t, $b->password); touch_db(); return out(200, admin_view($u));
     }
   }
   if ($m === 'PUT' && $r === 'roles') {
     if (!$adm) return out(403, ['error' => 'Réservé aux administrateurs']);
     $rl = clean_roles($b->roles ?? null); if (!$rl) return out(400, ['error' => 'Rôles invalides (nom en double, rôle intégré manquant ou rôle encore utilisé).']);
-    $db->roles = $rl; touch_db(); return out(200, admin_view());
+    $db->roles = $rl; touch_db(); return out(200, admin_view($u));
   }
   return out(404, ['error' => 'Introuvable']);
 }

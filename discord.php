@@ -35,7 +35,7 @@ try {
     $name = substr(preg_replace('/\s+/u', '_', (string)($pf->global_name ?? $pf->username ?? 'Discord')), 0, 28);
     if (strlen($name) < 2) $name = 'discord_' . substr($pf->id, -4);
     foreach ($db->users as $x) if (strtolower($x->name) === strtolower($name)) { $name .= '#' . substr($pf->id, -4); break; }
-    $u = (object)['id' => uid(), 'name' => $name, 'role' => count($db->users) ? 'pending' : 'admin', 'discordId' => (string)$pf->id, 'created' => round(microtime(true) * 1000)];
+    $u = (object)['id' => uid(), 'name' => $name, 'role' => count($db->users) ? 'pending' : 'admin', 'districts' => count($db->users) ? [] : DISTRICTS, 'discordId' => (string)$pf->id, 'created' => round(microtime(true) * 1000)];
     $db->users[] = $u;
   }
   $u->dname = (string)($pf->global_name ?? $pf->username ?? ''); $u->dun = (string)($pf->username ?? ''); $u->avatar = $pf->avatar ?? null;

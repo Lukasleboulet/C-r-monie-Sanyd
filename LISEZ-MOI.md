@@ -53,6 +53,14 @@ Copie `config.example.json` en `config.json` :
 ## Connexion uniquement avec Discord
 Dès que Discord est configuré, **seule la connexion Discord est possible** : le formulaire identifiant / mot de passe disparaît et le serveur le refuse. Pour qu'un ancien compte (créé avec un mot de passe) puisse se connecter, renseigne son **ID Discord** dans Administration › Accès & comptes. En cas de panne de Discord, `'passwordLogin' => true` dans `config.php` réactive temporairement les mots de passe.
 
+## Districts
+Cinq districts, chacun avec **ses propres données** (agents, heures, cérémonies, médailles, réglages), son logo et ses couleurs : **Mission Row** (noir), **Vespucci** (bleu), **Alta** (blanc), **Sandy Shore** (sable), **Roxwood** (vert).
+- Chaque compte a un **rôle** (permissions) **et un ou plusieurs districts**. Dans Administration › Accès & comptes, clique sur le logo d'un district pour en donner / retirer l'accès.
+- Un compte ne voit et ne modifie **que ses districts** (contrôlé par le serveur). Sans district : aucun accès. Les administrateurs ont tous les districts.
+- Plusieurs districts : on passe de l'un à l'autre avec les logos en haut de l'écran.
+- Un gestionnaire (« Gérer comptes ») ne voit que les comptes de ses districts et ne peut donner que ses districts.
+- Les données d'avant cette mise à jour sont devenues celles de **Sandy Shore**, et les comptes existants ont reçu Sandy Shore.
+
 ## Rôles et permissions (Administration › Accès & comptes — administrateurs)
 - **Onglets accessibles** par rôle : Effectifs, Heures, Importer, Cérémonie, Statistiques, Paramètres (grades, options de décision, sanctions).
 - **Permissions** par rôle (bouton « tout » pour tout cocher) :

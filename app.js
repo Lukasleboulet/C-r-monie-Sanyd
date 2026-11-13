@@ -4,6 +4,9 @@ const RIB_COLORS = ['#4f8ad8', '#3dbb7a', '#e0b23a', '#e0733a', '#c9473f', '#8e5
 const defaultMedals = () => [2, 4, 6, 8, 10, 12].map((m, i) => ({ id: 'rub' + m, name: `Ruban de service — ${m} mois`, n: m, u: 'm', color: RIB_COLORS[i], img: '' }));
 const DEFAULT_ACTIONS = [{ id: 'promo', label: 'Montée', mv: -1 }, { id: 'retro', label: 'Rétrogradation', mv: 1 }]; // mv : décalage dans la hiérarchie (-1 monte, 1 descend, 0 = aucun)
 const DEFAULT_SANCTIONS = ['Avertissement', 'Blâme', 'Mise à pied']; // modifiables par l'admin (Paramètres)
+const DIST = { mr: 'Mission Row', vesp: 'Vespucci', alta: 'Alta', sandy: 'Sandy Shore', rox: 'Roxwood' }, DIDS = Object.keys(DIST);
+const dName = d => DIST[d] || '—', dLogo = d => `assets/district-${DIST[d] ? d : 'sandy'}.png`;
+let curD = null, myD = [], DD = null; // district affiché, districts autorisés, district des données chargées
 const KEY = 'samp-sandy-shore-v1'; // clé propre à ce site (ne pas partager avec le site Vespucci)
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -56,7 +59,7 @@ function migrate(d) { // le grade « Rookie-PPA » n'existe pas : fusionné dans
   d.glog ||= [];
   d.medals ||= defaultMedals();
   d.medals.forEach(m => { if (m.months && !m.n) { m.n = m.months; m.u = 'm'; } delete m.months; }); // ancienneté : nombre + unité (j, s, m, a)
-  d.awards ||= {}; d.sheet ||= { url: '', gid: '', district: 'Sandy Shore', gmap: {}, last: 0 };
+  d.awards ||= {}; d.sheet ||= { url: '', gid: '', district: dName(curD || 'sandy'), gmap: {}, last: 0 };
   sortWeeks(d);
   d.ignRanks ||= ['Patron', 'Sheriff']; // rangs ignorés à l'import et masqués (sauf agents ajoutés à la main)
   d.sanctions ||= [...DEFAULT_SANCTIONS];
@@ -187,7 +190,7 @@ function recap() {
     const r = L.filter(a => D[a.id].a === x.id).map(a => `• ${full(a)} (${a.mat}) : ${D[a.id].from || a.grade} → ${D[a.id].g || a.grade} — ${D[a.id].r || 'sans raison'}`);
     return r.length ? `${sym(x)} ${x.label.toUpperCase()}\n${r.join('\n')}` : '';
   }).filter(Boolean);
-  return `SAMP — DISTRICT DE SANDY SHORE\nCÉRÉMONIE — SEMAINE DU ${S.weeks[cw]}\n\n` + (blocks.join('\n\n') || 'Aucune décision.');
+  return `SAMP — DISTRICT DE ${dName(DD || curD).toUpperCase()}\nCÉRÉMONIE — SEMAINE DU ${S.weeks[cw]}\n\n` + (blocks.join('\n\n') || 'Aucune décision.');
 }
 const lockFs = (perm, html) => can(perm) ? html : `<fieldset class="ro" disabled title="Ton rôle ne permet pas de modifier cette section">${html}</fieldset>`;
 const mgr = () => admin || can('usersManage'); // gestion des comptes (non administrateurs)
@@ -223,6 +226,7 @@ function render() {
   setKpi();
   $('#view').innerHTML = tab ? (() => { try { return views[tab](); } catch (e) { console.error(e); return `<section class="panel"><h2>Erreur d’affichage</h2><p class="note">Cet onglet n’a pas pu s’afficher : ${esc(e.message)}. Recharge la page (Ctrl + F5) ; si ça continue, envoie ce message.</p></section>`; } })() : me?.role === 'pending'
     ? `<section class="panel"><h2>Compte en attente de validation</h2><p class="note">Tu es connecté avec Discord, mais aucun rôle ne t’a encore été attribué. Communique ton ID Discord à un administrateur : <b class="mono">${esc(me.discordId || '')}</b></p></section>`
+    : me && !myD.length ? '<section class="panel"><h2>Aucun district attribué</h2><p class="note">Ton compte n’a accès à aucun district. Demande à un administrateur de t’attribuer ton district (Mission Row, Vespucci, Alta, Sandy Shore ou Roxwood).</p></section>'
     : '<section class="panel"><h2>Aucun accès</h2><p class="note">Ton rôle n’a accès à aucun onglet. Demande à un administrateur de modifier tes accès.</p></section>';
   { const pend = mgr() ? users.filter(u => u.role === 'pending').length : 0, sb = $('#nav [data-t="acc"]'); if (pend) sb.dataset.n = pend; else delete sb.dataset.n; }
   if (me) { $('#un').textContent = me.name; $('#ur').textContent = roleOf(me).name; { const dp = me.dname ? (me.dun ? '@' + me.dun : me.dname) : ''; $('#ud').textContent = dp; $('#ud').hidden = !dp; } { const av = me.discordId && me.avatar ? `https://cdn.discordapp.com/avatars/${me.discordId}/${me.avatar}.png?size=64` : ''; $('#uav').style.backgroundImage = av ? `url(${av})` : ''; $('#uav').textContent = av ? '' : me.name.slice(0, 2); } $('#ucard').classList.toggle('adm', admin); $('#rn').textContent = roleOf(me).name; $('#rl').textContent = admin ? 'accès total' : `${roleOf(me).tabs.length} onglet(s) · ${(roleOf(me).perms || []).length} permission(s)`; }
@@ -377,7 +381,7 @@ document.addEventListener('click', async e => {
   else if (act === 'aup' || act === 'adn') { swap(S.actions, +el.dataset.i, act === 'aup' ? -1 : 1); upd(); }
   else if (act === 'sup' || act === 'sdn') { swap(S.sanctions, +el.dataset.i, act === 'sup' ? -1 : 1); upd(); }
   else if (act === 'uadd') {
-    if (await adminCall('POST', '/api/users', { name: $('#nu').value.trim(), password: $('#np')?.value || '', discordId: $('#nd').value.trim(), role: $('#nr').value })) render();
+    if (await adminCall('POST', '/api/users', { name: $('#nu').value.trim(), password: $('#np')?.value || '', discordId: $('#nd').value.trim(), role: $('#nr').value, districts: $('#ndis')?.value ? [$('#ndis').value] : [] })) render();
   } else if (act === 'udel') {
     const u = users.find(x => x.id === id); if (!u || u.id === me.id) return;
     if (await dlg({ title: 'Retirer le compte', msg: `Supprimer le compte « ${u.name} » ?`, ok: 'Retirer', danger: true }) && await adminCall('DELETE', `/api/users/${id}`)) render();
@@ -404,6 +408,11 @@ document.addEventListener('click', async e => {
     const next = clone(roles), r = next.find(x => x.id === id); if (!r || r.admin) return;
     r.perms = PERMS.every(([k]) => (r.perms || []).includes(k)) ? [] : PERMS.map(([k]) => k);
     if (await adminCall('PUT', '/api/roles', { roles: next })) render();
+  }
+  else if (act === 'dsel') switchD(el.dataset.d);
+  else if (act === 'udis') { // donner / retirer l'accès à un district
+    if (!mgr()) return; const u = users.find(x => x.id === id); if (!u) return; const d = el.dataset.d, has = (u.districts || []).includes(d);
+    if (await adminCall('PATCH', `/api/users/${id}`, { districts: has ? u.districts.filter(x => x !== d) : [...(u.districts || []), d] })) render();
   }
   else if (act === 'sagent') { st.id = id; render(); }
   else if (act === 'sper') { st.f = +el.dataset.n ? Math.max(0, lastW() - +el.dataset.n + 1) : 0; st.t = null; render(); }
@@ -544,7 +553,7 @@ const PERMS = PERM_GROUPS.flatMap(g => g[1]);
 let pwdOn = true, roles = [], users = [], firstRun = false, discordOn = false, redirUrl = '', dcMsg = '';
 let SV = 0, VV = 0, S0 = null, saving = false, dirty = false, saveTimer = null, needRender = false;
 const roleOf = u => roles.find(r => r.id === u.role) || roles.find(r => r.id === 'user') || { name: '?', tabs: [], perms: [] };
-const canTab = t => !!me && !!t && (t === 'acc' ? admin || can('usersManage') : t === 'mda' ? can('medalEdit') || can('sheetSync') : admin || (roleOf(me).tabs || []).includes(t)); // acc / mda : selon les permissions
+const canTab = t => !!me && !!t && (t === 'acc' || myD.length > 0) && (t === 'acc' ? admin || can('usersManage') : t === 'mda' ? can('medalEdit') || can('sheetSync') : admin || (roleOf(me).tabs || []).includes(t)); // acc / mda : selon les permissions
 const can = p => !!me && (admin || (roleOf(me).perms || []).includes(p)); // permissions fines (voir « Rôles et accès »)
 const clone = x => JSON.parse(JSON.stringify(x));
 const setSync = (s, tip) => { const l = $('#syled'); if (l) { l.dataset.s = s; l.title = tip; } };
@@ -588,8 +597,9 @@ async function flush() {
   if (!dirty) return;
   saving = true; dirty = false; const snap = clone(S);
   try {
-    const r = await api('PUT', '/api/state', { base: SV, state: snap });
-    if (r.status === 409) { const R = migrate(r.json.state); S = merge(S0 || R, S, R); S0 = clone(R); SV = r.json.sv; VV = r.json.v; dirty = true; setTimeout(flush, 30); softRender(); }
+    if (!DD) { saving = false; return; }
+    const r = await api('PUT', '/api/state', { base: SV, state: snap, d: DD });
+    if (r.status === 409) { const R = migrate(r.json.state || seed()); S = merge(S0 || R, S, R); S0 = clone(R); SV = r.json.sv; VV = r.json.v; dirty = true; setTimeout(flush, 30); softRender(); }
     else if (r.ok) { fails = 0; SV = r.json.sv; VV = r.json.v; S0 = snap; setSync(dirty ? 'busy' : 'ok', dirty ? 'Enregistrement…' : 'Synchronisé avec le serveur'); }
     else if (r.status === 403) { setSync('off', 'Droits insuffisants pour enregistrer'); }
     else { dirty = true; setSync('off', r.json?.error || 'Enregistrement refusé'); saveTimer = setTimeout(flush, retryMs()); }
@@ -599,13 +609,33 @@ async function flush() {
 function applyPayload(j) {
   VV = j.v; if (j.roles) roles = j.roles; if (j.users) users = j.users;
   if (j.me) { me = j.me; admin = !!roleOf(me).admin; }
-  if (j.state === null) { S = migrate(seed()); S0 = clone(S); SV = j.sv; save(); } // serveur vide : on crée la 1re version
-  else if (j.state && j.sv !== SV && !dirty && !saving) { S = migrate(j.state); S0 = clone(S); SV = j.sv; }
+  if (j.districts) myD = j.districts;
+  if ('d' in j) curD = j.d;
+  const sw = j.d !== DD; // changement de district : on remplace les données affichées
+  if (!j.d) { DD = null; S = migrate(seed()); S0 = null; }
+  else if (j.state === null && (sw || !dirty)) { DD = j.d; S = migrate(seed()); S0 = clone(S); SV = j.sv; save(); } // district vide : on crée la 1re version
+  else if (j.state && (sw || (j.sv !== SV && !dirty && !saving))) { DD = j.d; S = migrate(j.state); S0 = clone(S); SV = j.sv; }
+  if (curD) try { localStorage.setItem(KEY + '-d', curD); } catch (e) {}
+  applyDistrict();
+}
+function applyDistrict() { // logo, couleurs, nom et sélecteur du district affiché
+  const d = curD || 'sandy'; document.documentElement.dataset.d = d;
+  document.querySelectorAll('img.logo, img.llogo').forEach(i => { if (!i.src.endsWith(dLogo(d))) i.src = dLogo(d); });
+  const ic = document.querySelector('link[rel="icon"]'); if (ic) ic.href = dLogo(d);
+  const b = document.querySelector('.ab-brand b'); if (b) b.textContent = 'SAMP · ' + dName(d);
+  document.title = `SAMP · ${dName(d)} · Suivi & Cérémonies`;
+  const w = $('#dsw'); if (w) w.innerHTML = !me || !myD.length ? '' : myD.map(x => `<button type="button" class="dchip${x === curD ? ' on' : ''}" data-a="dsel" data-d="${x}" title="District ${dName(x)}"${myD.length < 2 ? ' disabled' : ''}><img src="${dLogo(x)}" alt=""><span>${dName(x)}</span></button>`).join('');
+}
+async function switchD(d) { // changer de district (les modifications en cours sont d'abord enregistrées)
+  if (!myD.includes(d) || d === curD) return;
+  clearTimeout(saveTimer); if (dirty || saving) { for (let k = 0; k < 40 && (dirty || saving); k++) { if (!saving) await flush(); else await new Promise(r => setTimeout(r, 100)); } }
+  curD = d; syncP = null; st.id = null; mq = ''; hq = ''; hg = ''; cw = hw = null;
+  try { const r = await api('GET', '/api/boot?d=' + d); if (r.ok && r.json) { applyPayload(r.json); tab = canTab(tab) ? tab : TABS.find(canTab) || null; render(); } } catch (e) { setSync('off', 'Serveur injoignable'); }
 }
 async function sync() { // toutes les 4 s : récupère les changements des autres ordinateurs
   if (!me || document.hidden || saving || dirty) return;
   try {
-    const r = await api('GET', '/api/sync?v=' + VV);
+    const r = await api('GET', '/api/sync?v=' + VV + (curD ? '&d=' + curD : ''));
     if (r.status === 401) { me = null; admin = false; render(); showLogin(); return; }
     setSync('ok', 'Synchronisé avec le serveur');
     if (!r.json || r.json.same) return;
@@ -614,7 +644,8 @@ async function sync() { // toutes les 4 s : récupère les changements des autre
 }
 { const Q = new URLSearchParams(location.search), q = Q.get('dc'), why = Q.get('why'); if (q) { history.replaceState(null, '', location.pathname); dcMsg = { denied: 'Connexion Discord annulée ou refusée.', state: 'Connexion Discord invalide : réessaie.', error: 'Connexion Discord impossible : réessaie.', conf: 'Discord n’est pas configuré sur le serveur (voir LISEZ-MOI).' }[q] || ''; if (dcMsg && why) dcMsg += ' (' + why + ')'; } }
 async function load() {
-  let j; try { j = (await api('GET', '/api/boot')).json; } catch (e) { j = null; }
+  { try { curD = localStorage.getItem(KEY + '-d') || null; } catch (e) {} }
+  let j; try { j = (await api('GET', '/api/boot' + (curD ? '?d=' + curD : ''))).json; } catch (e) { j = null; }
   if (!j) { setSync('off', 'Serveur injoignable'); firstRun = false; showLogin(); $('#le').textContent = 'Serveur injoignable : vérifie que api.php est bien en ligne (hébergement PHP) ou lance « node server.js ».'; return; }
   firstRun = !!j.firstRun; discordOn = !!j.discord; pwdOn = j.pwd !== false; redirUrl = j.redirect || '';
   if (!j.me) { me = null; admin = false; users = []; roles = []; render(); showLogin(); if (dcMsg) $('#le').textContent = dcMsg; return; }
@@ -684,19 +715,20 @@ const avHtml = u => u.discordId && u.avatar ? `<span class="av img" style="backg
 function usersPanel() {
   const isA = u => !!roleOf(u).admin, okRoles = roles.filter(r => admin || !r.admin);
   const ro = sel => okRoles.map(r => `<option value="${r.id}" ${r.id === sel ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
+  const dTog = u => isA(u) ? '<span class="dtg"><span class="tag">tous les districts</span></span>' : `<span class="dtg">${DIDS.map(d => `<button type="button" class="dchip sm${(u.districts || []).includes(d) ? ' on' : ''}" data-a="udis" data-id="${u.id}" data-d="${d}" title="${(u.districts || []).includes(d) ? 'Retirer' : 'Donner'} l’accès à ${dName(d)}" ${myD.includes(d) ? '' : 'disabled'}><img src="${dLogo(d)}" alt=""><span>${dName(d)}</span></button>`).join('')}</span>`;
   const row = u => {
     const lockU = !admin && isA(u); // un gestionnaire ne touche pas aux administrateurs
     return `<div class="frm${u.role === 'pending' ? ' pend' : ''}">${avHtml(u)}<b class="uname">${esc(u.name)}${u.id === me?.id ? ' <span class="note">(toi)</span>' : ''}${u.role === 'pending' ? ' <span class="tag">En attente</span>' : ''}</b>` +
-      `<input class="ein" style="width:170px" data-a="udid" data-id="${u.id}" placeholder="ID Discord" value="${esc(u.discordId || '')}" ${lockU ? 'disabled' : ''}>` +
+      dTog(u) + `<input class="ein" style="width:170px" data-a="udid" data-id="${u.id}" placeholder="ID Discord" value="${esc(u.discordId || '')}" ${lockU ? 'disabled' : ''}>` +
       `<span class="dpn${u.dname ? ' on' : ''}" title="Pseudo Discord (rempli automatiquement à la connexion avec Discord)"><svg viewBox="0 0 24 24"><path d="M7.2 6.2c1.6-.7 3.3-1 4.8-1s3.2.3 4.8 1l1.7 1.9c1.4 2.6 2 5.4 1.8 8.4-1.4 1.1-3.1 1.8-4.4 2.1l-1.1-1.7c.9-.2 1.7-.6 2.4-1.1-.2-.1-.5-.3-.7-.5-2.3 1-5.1 1-7.4 0-.2.2-.5.4-.7.5.7.5 1.5.9 2.4 1.1l-1.1 1.7c-1.3-.3-3-1-4.4-2.1-.2-3 .4-5.8 1.8-8.4z"/></svg>${u.dname ? esc(dpseudo(u)) : '<i>non connecté avec Discord</i>'}</span>` +
       (lockU ? `<span class="tag">${esc(roleOf(u).name)}</span>` : `<select class="cin" data-a="urole" data-id="${u.id}">${ro(u.role)}</select>${pwdOn ? `<button class="btn ghost" data-a="upw" data-id="${u.id}">Mot de passe</button>` : ''}${u.id === me?.id ? '' : `<button class="btn del" data-a="udel" data-id="${u.id}">${u.role === 'pending' ? 'Refuser' : 'Retirer'}</button>`}`) + `</div>`;
   };
   const pend = users.filter(u => u.role === 'pending');
   return `<section class="panel req"><h2>Demandes d’accès <span class="note">(${pend.length})</span></h2>${pend.length ? '<p class="note">Personnes connectées avec Discord en attente d’un rôle : choisis leur rôle pour leur donner accès, ou refuse la demande.</p>' + pend.map(row).join('') : '<p class="note">Aucune demande en attente.</p>'}</section>
   <section class="panel"><h2>Comptes utilisateurs <span class="note">(${users.length - pend.length})</span></h2><p class="note">Les comptes sont enregistrés sur le serveur et partagés entre tous les ordinateurs. Le rôle de chaque compte détermine les onglets et les actions autorisés (voir « Rôles et accès »).</p>
-  ${admin ? `<p class="note">Connexion Discord : <b>${discordOn ? 'configurée' : 'non configurée'}</b> · URL de redirection à enregistrer dans le portail Discord : <code class="mono">${esc(redirUrl)}</code></p>` : ''}<p class="note">Quand quelqu’un se connecte avec Discord pour la première fois, son compte apparaît ci-dessous avec le rôle « En attente » et son pseudo Discord : choisis-lui simplement son rôle. Tu peux aussi créer son compte à l’avance avec son ID Discord.</p>` +
+  ${admin ? `<p class="note">Connexion Discord : <b>${discordOn ? 'configurée' : 'non configurée'}</b> · URL de redirection à enregistrer dans le portail Discord : <code class="mono">${esc(redirUrl)}</code></p>` : ''}<p class="note">Quand quelqu’un se connecte avec Discord pour la première fois, son compte apparaît ci-dessous avec le rôle « En attente » et son pseudo Discord : choisis-lui son rôle, puis clique sur le logo de son district pour lui en donner l’accès (clique à nouveau pour le retirer). Tu peux aussi créer son compte à l’avance avec son ID Discord.</p>` +
     (users.filter(u => u.role !== 'pending').map(row).join('') || '<p class="note">Aucun compte.</p>') +
-    `<div class="frm"><input id="nu" placeholder="Identifiant" autocomplete="off"><input id="nd" placeholder="ID Discord${pwdOn ? ' (optionnel)' : ''}" autocomplete="off">${pwdOn ? '<input id="np" type="password" placeholder="Mot de passe (facultatif avec Discord)" autocomplete="new-password">' : ''}<select id="nr">${ro('user')}</select><button class="btn gold" data-a="uadd">Créer le compte</button></div></section>`;
+    `<div class="frm"><input id="nu" placeholder="Identifiant" autocomplete="off"><input id="nd" placeholder="ID Discord${pwdOn ? ' (optionnel)' : ''}" autocomplete="off">${pwdOn ? '<input id="np" type="password" placeholder="Mot de passe (facultatif avec Discord)" autocomplete="new-password">' : ''}<select id="nr">${ro('user')}</select><select id="ndis" title="District du compte">${myD.map(d => `<option value="${d}" ${d === curD ? 'selected' : ''}>${dName(d)}</option>`).join('')}</select><button class="btn gold" data-a="uadd">Créer le compte</button></div></section>`;
 }
 
 // ---------- médailles, rubans de service & synchronisation Google Sheet ----------

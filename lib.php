@@ -9,6 +9,7 @@ const DATA_GUARD = "<?php http_response_code(404); exit; ?>\n"; // empêche la l
 const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set'];
 const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'cerEditDone', 'gradeEdit', 'actionEdit', 'sanctionEdit', 'usersManage', 'medalEdit', 'sheetSync', 'dataBackup', 'dataReset'];
 const BUILTIN = ['admin', 'user', 'pending'];
+const DISTRICTS = ['mr', 'vesp', 'alta', 'sandy', 'rox']; // Mission Row, Vespucci, Alta, Sandy Shore, Roxwood : données séparées
 const JF = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE;
 
 $ROOT = __DIR__; $DATA = $ROOT . '/data';
@@ -64,7 +65,9 @@ function db_open() {
   if ($raw === null && is_file("$DATA/db.json")) $raw = @file_get_contents("$DATA/db.json");
   $d = $raw ? json_decode($raw) : null;
   if (!is_object($d)) $d = (object)[];
-  foreach (['v' => 1, 'sv' => 0, 'state' => null, 'users' => [], 'roles' => null] as $k => $v) if (!property_exists($d, $k)) $d->$k = $v;
+  foreach (['v' => 1, 'users' => [], 'roles' => null] as $k => $v) if (!property_exists($d, $k)) $d->$k = $v;
+  if (!isset($d->states) || !is_object($d->states)) $d->states = (object)[];
+  if (!isset($d->svs) || !is_object($d->svs)) $d->svs = (object)[];
   if (!is_array($d->roles)) $d->roles = [];
   foreach (default_roles() as $i => $r) { $has = false; foreach ($d->roles as $x) if ($x->id === $r->id) $has = true; if (!$has) array_splice($d->roles, min($i, count($d->roles)), 0, [$r]); }
   if (($d->pv ?? 1) < 2) { // nouvelles permissions : accordées aux rôles qui avaient déjà l'accès équivalent
@@ -86,6 +89,11 @@ function db_open() {
       $r->tabs = array_values(array_unique($t)); $r->perms = array_values(array_unique($p));
     }
     $d->pv = 3; $GLOBALS['dbDirty'] = true;
+  }
+  if (($d->pv ?? 1) < 4) { // districts : l'ancienne base unique devient celle de Sandy Shore ; comptes existants -> Sandy Shore
+    if (property_exists($d, 'state')) { if ($d->state) { $d->states->sandy = $d->state; $d->svs->sandy = $d->sv ?? 0; } unset($d->state, $d->sv); }
+    foreach ($d->users as $u) if (!isset($u->districts) || !is_array($u->districts)) $u->districts = ($u->role ?? '') === 'pending' ? [] : ['sandy'];
+    $d->pv = 4; $GLOBALS['dbDirty'] = true;
   }
   $db = $d;
 }
@@ -133,22 +141,26 @@ function perms_of($u) { return (array)(role_of($u)->perms ?? []); }
 function can_read($u) { $r = role_of($u); return !empty($r->admin) || count((array)$r->tabs) > 0 || count((array)$r->perms) > 0; }
 function can_write($u) { $r = role_of($u); return !empty($r->admin) || count((array)$r->perms) > 0 || count(array_intersect((array)$r->tabs, ['eff', 'hrs', 'imp', 'cer', 'set'])) > 0; }
 function can_manage($u) { return is_admin($u) || in_array('usersManage', perms_of($u)); }
+function d_of($u) { return is_admin($u) ? DISTRICTS : array_values(array_intersect(DISTRICTS, (array)($u->districts ?? []))); } // districts accessibles
+function pick_d($u, $q) { global $db; $L = d_of($u); if (in_array($q, $L, true)) return $q; foreach ($L as $x) if (isset($db->states->$x)) return $x; return $L[0] ?? null; }
+function sees_user($u, $t) { return is_admin($u) || ($t->role ?? '') === 'pending' || count(array_intersect((array)($t->districts ?? []), d_of($u))) > 0; }
+function sv_of($d) { global $db; return (int)($db->svs->$d ?? 0); }
 function pub($u) {
-  return ['id' => $u->id, 'name' => $u->name, 'role' => $u->role, 'discordId' => $u->discordId ?? '', 'dname' => $u->dname ?? '', 'dun' => $u->dun ?? '',
+  return ['id' => $u->id, 'name' => $u->name, 'role' => $u->role, 'districts' => array_values((array)($u->districts ?? [])), 'discordId' => $u->discordId ?? '', 'dname' => $u->dname ?? '', 'dun' => $u->dun ?? '',
     'avatar' => $u->avatar ?? null, 'created' => $u->created ?? 0, 'hasPwd' => !empty($u->hash) && empty($u->salt)];
 }
 function find_user($id) { global $db; foreach ($db->users as $u) if ($u->id === $id) return $u; return null; }
 function authed() { $t = read_tok($_COOKIE['sid'] ?? ''); return $t ? find_user($t->u) : null; }
 function pwd_on() { global $CONFIG; return !discord_on() || !empty($CONFIG['passwordLogin']); } // identifiant + mot de passe : seulement sans Discord (ou secours activé)
 function flags() { return ['discord' => discord_on(), 'redirect' => redirect_uri(), 'pwd' => pwd_on()]; }
-function payload($u) {
-  global $db;
-  $p = flags() + ['v' => $db->v, 'sv' => $db->sv, 'me' => pub($u), 'roles' => $db->roles];
-  if (can_read($u)) $p['state'] = $db->state;
-  if (can_manage($u)) $p['users'] = array_map('pub', $db->users);
+function payload($u, $dq = null) {
+  global $db; $d = pick_d($u, $dq);
+  $p = flags() + ['v' => $db->v, 'd' => $d, 'districts' => d_of($u), 'sv' => $d ? sv_of($d) : 0, 'me' => pub($u), 'roles' => $db->roles];
+  if (can_read($u) && $d) $p['state'] = $db->states->$d ?? null;
+  if (can_manage($u)) $p['users'] = array_values(array_map('pub', array_filter($db->users, fn($t) => sees_user($u, $t))));
   return $p;
 }
-function admin_view() { global $db; return ['v' => $db->v, 'users' => array_map('pub', $db->users), 'roles' => $db->roles]; }
+function admin_view($u = null) { global $db; return ['v' => $db->v, 'users' => array_values(array_map('pub', array_filter($db->users, fn($t) => !$u || sees_user($u, $t)))), 'roles' => $db->roles]; }
 function login_user($u, $remember) { set_cookie('sid', mk_tok($u->id, 30 * 864e5), $remember ? 30 * 86400 : 0); }
 function slen($s) { return function_exists('mb_strlen') ? mb_strlen($s) : strlen($s); }
 function name_err($n) {
