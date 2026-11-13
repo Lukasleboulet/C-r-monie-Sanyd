@@ -20,7 +20,7 @@ const SKF = path.join(DATA, 'secret.key'); let SECRET;
 try { SECRET = fs.readFileSync(SKF, 'utf8'); } catch (e) { SECRET = crypto.randomBytes(32).toString('hex'); fs.writeFileSync(SKF, SECRET, { mode: 0o600 }); }
 
 const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set'];
-const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'cerEditDone', 'gradeEdit', 'actionEdit', 'sanctionEdit', 'usersManage', 'medalEdit', 'sheetSync', 'dataBackup', 'dataReset'];
+const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'cerEditDone', 'cerAll', 'gradeEdit', 'actionEdit', 'sanctionEdit', 'usersManage', 'medalEdit', 'sheetSync', 'dataBackup', 'dataReset'];
 const BUILTIN = ['admin', 'pending']; // rôles indispensables (« Utilisateur » est un rôle ordinaire, supprimable)
 const defaultRoles = () => [
   { id: 'admin', name: 'Administrateur', admin: true, builtin: true, tabs: TABS.slice(0, 6), perms: [...PERMS] },

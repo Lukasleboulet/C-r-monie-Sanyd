@@ -171,11 +171,22 @@ function decTxt(x, cur) {
   const ar = i < 0 || k < 0 ? '→' : k < i ? '▲' : k > i ? '▼' : '=';
   return `${ar} ${def ? x.to : x.label}`;
 }
+// Cérémonie : sans « Voir tous les grades », on ne voit que les agents de son grade et en dessous.
+// Le grade du compte = celui de sa fiche agent dans ce district (même ID Discord que le compte, lu dans le Google Sheet).
+const myAgent = () => me?.discordId ? S.agents.find(a => a.did === me.discordId) || null : null;
+const cerAllowAll = () => admin || can('cerAll');
+function canSeeCer(a) {
+  if (cerAllowAll()) return true;
+  const m = myAgent(); if (!m) return false;
+  const D = S.ceremonies[S.weeks[cw ?? S.weeks.length - 1]] || {}, d = D[a.id] || {};
+  return gi(d.done ? d.from : a.grade) >= gi(m.grade); // indice plus grand = grade plus bas
+}
 const cerN = () => Math.min(4, Math.max(2, S.cerN || 3)); // nombre de semaines de la cérémonie (3 par défaut)
 function vCer() {
   if (cw == null || cw >= S.weeks.length) cw = S.weeks.length - 1;
   const j = cw, wk = S.weeks[j], D = S.ceremonies[wk] || {}, N = cerN(), win = [...Array(N).keys()].map(k => j - N + 1 + k), nOk = win.filter(i => i >= 0).length || 1; // N semaines : S-1 (la plus ancienne) … S-N (semaine choisie)
-  const rows = sorted().map(a => {
+  if (!cerAllowAll() && !myAgent()) return `<section class="panel"><h2>Cérémonie</h2><p class="note">Ton compte n’est relié à aucune fiche agent dans ce district : impossible de savoir ton grade. La fiche agent doit avoir le même ID Discord que ton compte (colonne « ID discord » du Google Sheet, puis synchronisation). Demande à un administrateur.</p></section>`;
+  const rows = sorted().filter(canSeeCer).map(a => {
     const hs = win.map(i => i >= 0 ? a.w[i] : null), d = D[a.id] || {}, on = !!d.a, lock = !can('cerEdit') || (d.done && !can('cerEditDone'));
     const gi0 = S.grades.indexOf(d.done ? d.from : a.grade), gk = S.grades.indexOf(d.g || ''), cls = !on ? '' : gk < 0 || gk === gi0 ? 'dec' : gk < gi0 ? 'up' : 'down';
     return `<tr class="${cls}"><td><div class="nm"><span>${esc(a.prenom)} <b>${esc((a.nom || '').toUpperCase())}</b></span>${badge(d.done ? d.from : a.grade)}</div></td><td class="mono">${esc(a.mat)}</td>
@@ -204,7 +215,7 @@ const who = a => `${a.did ? `<@${a.did}> - ` : ''}${a.mat && a.mat !== '-' ? a.m
 function weekFull(w) { const k = weekKey(w); return `${String(k % 100).padStart(2, '0')}/${String(Math.floor(k / 100) % 100).padStart(2, '0')}/${Math.floor(k / 10000)}`; }
 function recap() {
   const D = S.ceremonies[S.weeks[cw]] || {}, gi2 = g => { const i = S.grades.indexOf(g); return i < 0 ? 999 : i; }, groups = new Map();
-  actv().filter(a => D[a.id]?.a).forEach(a => { const d = D[a.id], from = d.from || a.grade, to = d.g || a.grade, k = from + '\u0000' + to; if (!groups.has(k)) groups.set(k, { from, to, L: [] }); groups.get(k).L.push(a); });
+  actv().filter(a => D[a.id]?.a && canSeeCer(a)).forEach(a => { const d = D[a.id], from = d.from || a.grade, to = d.g || a.grade, k = from + '\u0000' + to; if (!groups.has(k)) groups.set(k, { from, to, L: [] }); groups.get(k).L.push(a); });
   const G = [...groups.values()].sort((p, q) => gi2(p.to) - gi2(q.to) || gi2(p.from) - gi2(q.from)); // du grade le plus haut au plus bas
   const e = cerEmo().trim(), head = `## ${e ? e + ' ' : ''}Cérémonie ${dName(DD || curD)} - ${weekFull(S.weeks[cw])}${e ? ' ' + e : ''}`;
   const body = G.map(g => `**${gTxt(g.from)} -> ${gTxt(g.to)} :**\n\n` + g.L.sort((p, q) => (p.nom || '').localeCompare(q.nom || '')).map(a => `- ${who(a)}`).join('\n')).join('\n\n');
@@ -454,7 +465,7 @@ document.addEventListener('click', async e => {
   }
   else if (act === 'copy') { await navigator.clipboard.writeText(recap()); el.textContent = 'Copié ✓'; }
   else if (act === 'apply') {
-    const D = S.ceremonies[S.weeks[cw]] || {}, todo = actv().filter(a => D[a.id]?.a && !D[a.id].done);
+    const D = S.ceremonies[S.weeks[cw]] || {}, todo = actv().filter(a => D[a.id]?.a && !D[a.id].done && canSeeCer(a));
     if (todo.length && await dlg({ title: 'Valider la cérémonie', msg: `Appliquer ${todo.length} changement(s) de grade aux agents concernés ?`, ok: 'Appliquer', icon: 'warn' })) {
       todo.forEach(a => { D[a.id].from = D[a.id].from || a.grade; a.grade = D[a.id].g || a.grade; D[a.id].done = true; }); upd();
     }
@@ -568,7 +579,7 @@ const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set', 'acc', 'mda'];
 const PERM_GROUPS = [
   ['Agents', [['agentAdd', 'Créer'], ['agentEdit', 'Modifier'], ['agentDel', 'Archiver / suppr.']]],
   ['Heures', [['hoursEdit', 'Saisir'], ['hoursImport', 'Importer'], ['weekAdd', 'Ajouter semaine']]],
-  ['Cérémonie', [['cerEdit', 'Préparer'], ['cerValidate', 'Valider'], ['cerEditDone', 'Modifier validée']]],
+  ['Cérémonie', [['cerEdit', 'Préparer'], ['cerValidate', 'Valider'], ['cerEditDone', 'Modifier validée'], ['cerAll', 'Voir tous les grades']]],
   ['Paramètres', [['gradeEdit', 'Grades'], ['actionEdit', 'Options décision'], ['sanctionEdit', 'Sanctions'], ['usersManage', 'Gérer comptes']]],
   ['Médailles', [['medalEdit', 'Gérer / remettre'], ['sheetSync', 'Synchro Google Sheet']]],
   ['Données', [['dataBackup', 'Sauvegarde'], ['dataReset', 'Restaurer / réinit.']]]];
@@ -1008,7 +1019,7 @@ function staDetail(a) {
   const k = s.k, trend = k.length >= 6 ? k.slice(-3).reduce((x, y) => x + y, 0) / 3 - k.slice(-6, -3).reduce((x, y) => x + y, 0) / 3 : null;
   const big = (l, v, sub, cls = '') => `<div class="sk big ${cls}"><span>${l}</span><b>${v}</b>${sub ? `<em>${sub}</em>` : ''}</div>`;
   const card = (l, v, cls = '') => `<div class="sk ${cls}" title="${esc(l)}"><span>${l}</span><b>${v}</b></div>`;
-  const hist = gradeHistory(a), n0 = t - f + 1;
+  const seeC = canSeeCer(a), hist = gradeHistory(a).filter(h => seeC || h.st !== 'prevu'), n0 = t - f + 1;
   const cer = S.weeks.map((wk, j) => ({ wk, j, d: S.ceremonies[wk]?.[a.id] })).filter(o => o.d && (o.d.a || o.d.sanction || o.d.casiers || o.d.fps || o.d.f1020 || o.d.fus || o.d.abs || o.d.r || o.d.notes));
   const yes = v => v ? '<span class="ok">✓</span>' : '<span class="note">—</span>', nS = cer.filter(o => o.d.sanction).length, nA = cer.filter(o => o.d.abs).length;
   const wk = [...Array(n0).keys()].map(i => f + i).reverse();
@@ -1025,8 +1036,8 @@ function staDetail(a) {
   <section class="panel"><div class="ph"><h2>Détail par semaine</h2></div><div class="wrapt"><table><thead><tr><th>Semaine</th><th>Heures</th><th>Écart moy.</th><th></th></tr></thead><tbody>` +
     wk.map(i => { const v = a.w[i], d = v == null || !s.n ? null : v - s.avg; return `<tr><td>${S.weeks[i]}</td><td class="hcell">${F(v)}</td><td class="hcell ${d == null ? '' : d >= 0 ? 'pos' : 'neg'}">${d == null ? '—' : Fd(d)}</td><td><span class="mini"><i style="width:${Math.min(100, (v || 0) / BAR_MAX * 100)}%"></i></span></td></tr>`; }).join('') + `</tbody></table></div></section>
   </div>
-  <section class="panel"><div class="ph"><h2>Cérémonies & suivi</h2><span class="note">${cer.length} cérémonie(s) · ${nS} sanction(s) · ${nA} absence(s)</span></div>${cer.length ? `<div class="wrapt"><table><thead><tr><th>Semaine</th><th>Décision</th><th>Sanction</th><th>Casiers</th><th>Forma PS</th><th>Forma 10-20</th><th>Fusillade</th><th>Absence</th><th>Explication</th><th>Notes</th></tr></thead><tbody>` +
-    cer.map(o => { const d = o.d, x = S.actions.find(y => y.id === d.a); return `<tr><td>${o.wk}</td><td>${x ? `${sym(x)} ${esc(x.label)}${d.g ? ` → ${esc(d.g)}` : ''}${d.done ? '' : ' <span class="note">(prévu)</span>'}` : '—'}</td><td>${esc(d.sanction || '—')}</td><td>${esc(d.casiers ?? '—')}</td><td>${yes(d.fps)}</td><td>${yes(d.f1020)}</td><td>${yes(d.fus)}</td><td>${yes(d.abs)}</td><td>${esc(d.r || '—')}</td><td>${esc(d.notes || '—')}</td></tr>`; }).join('') + `</tbody></table></div>` : '<p class="note">Aucune cérémonie avec des données pour cet agent.</p>'}</section>`;
+  ${seeC ? '' : '<!--'}<section class="panel"><div class="ph"><h2>Cérémonies & suivi</h2><span class="note">${cer.length} cérémonie(s) · ${nS} sanction(s) · ${nA} absence(s)</span></div>${cer.length ? `<div class="wrapt"><table><thead><tr><th>Semaine</th><th>Décision</th><th>Sanction</th><th>Casiers</th><th>Forma PS</th><th>Forma 10-20</th><th>Fusillade</th><th>Absence</th><th>Explication</th><th>Notes</th></tr></thead><tbody>` +
+    cer.map(o => { const d = o.d, x = S.actions.find(y => y.id === d.a); return `<tr><td>${o.wk}</td><td>${x ? `${sym(x)} ${esc(x.label)}${d.g ? ` → ${esc(d.g)}` : ''}${d.done ? '' : ' <span class="note">(prévu)</span>'}` : '—'}</td><td>${esc(d.sanction || '—')}</td><td>${esc(d.casiers ?? '—')}</td><td>${yes(d.fps)}</td><td>${yes(d.f1020)}</td><td>${yes(d.fus)}</td><td>${yes(d.abs)}</td><td>${esc(d.r || '—')}</td><td>${esc(d.notes || '—')}</td></tr>`; }).join('') + `</tbody></table></div>` : '<p class="note">Aucune cérémonie avec des données pour cet agent.</p>'}</section>${seeC ? '' : '-->'}`;
 }
 function vSta() {
   if (st.id && !S.agents.some(a => a.id === st.id && !hiddenA(a))) st.id = null;

@@ -7,7 +7,7 @@ error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE); ini_set('display_errors', '0
 
 const DATA_GUARD = "<?php http_response_code(404); exit; ?>\n"; // empêche la lecture directe des fichiers de données
 const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set'];
-const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'cerEditDone', 'gradeEdit', 'actionEdit', 'sanctionEdit', 'usersManage', 'medalEdit', 'sheetSync', 'dataBackup', 'dataReset'];
+const PERMS = ['agentAdd', 'agentEdit', 'agentDel', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'cerValidate', 'cerEditDone', 'cerAll', 'gradeEdit', 'actionEdit', 'sanctionEdit', 'usersManage', 'medalEdit', 'sheetSync', 'dataBackup', 'dataReset'];
 const BUILTIN = ['admin', 'pending']; // rôles indispensables (« Utilisateur » est un rôle ordinaire, supprimable)
 const DISTRICTS = ['mr', 'vesp', 'alta', 'sandy', 'rox']; // Mission Row, Vespucci, Alta, Sandy Shore, Roxwood : données séparées
 const JF = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE;
