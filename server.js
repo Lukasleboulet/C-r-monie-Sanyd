@@ -12,6 +12,11 @@ let C = {}; try { C = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'),
 const PORT = +(process.env.PORT || C.port || 3000);
 const FIXED = (process.env.BASE_URL || C.baseUrl || '').replace(/\/$/, ''); // vide = adresse détectée à chaque requête (tunnel Cloudflare, réseau local…)
 let BASE = FIXED || `http://localhost:${PORT}`;
+// FolkOS (affichage dans l'ordinateur du jeu + « Se connecter IG ») : variables d'environnement fournies par l'hébergeur
+const FK = { host: (process.env.FOLKOS_HOST || C.folkosHost || '').replace(/\/+$/, ''), idBase: (process.env.FOLKOS_ID_BASE || '').replace(/\/+$/, ''), clientId: process.env.FOLKOS_CLIENT_ID || '', secret: process.env.FOLKOS_CLIENT_SECRET || '' };
+const FK_ON = !!(FK.idBase && FK.clientId && FK.secret);
+const CSP = "frame-ancestors 'self' https://*.fbfa.fr https://fbfa.fr https://cfx-nui-external-iframe nui://game nui:"; // affichage dans l'iframe du jeu
+const TAB_PATHS = /^\/(effectifs|heures|importer|ceremonie|statistiques|medailles|personnalisation|acces|gestion-medailles)\/?$/; // une adresse par onglet
 const DC = { id: process.env.DISCORD_CLIENT_ID || C.discordClientId || '', secret: process.env.DISCORD_CLIENT_SECRET || C.discordClientSecret || '' };
 let REDIRECT = BASE + '/discord.php', SECURE = BASE.startsWith('https');
 
@@ -72,7 +77,7 @@ function readTok(t) {
 }
 const cookies = req => Object.fromEntries((req.headers.cookie || '').split(';').map(c => c.trim()).filter(Boolean).map(c => { const i = c.indexOf('='); return [c.slice(0, i), decodeURIComponent(c.slice(i + 1))]; }));
 const setCookie = (res, name, val, maxAge) => {
-  const c = `${name}=${encodeURIComponent(val)}; Path=/; HttpOnly; SameSite=Lax${maxAge ? `; Max-Age=${maxAge}` : ''}${SECURE ? '; Secure' : ''}`;
+  const c = `${name}=${encodeURIComponent(val)}; Path=/; HttpOnly; ${SECURE ? 'SameSite=None; Secure' : 'SameSite=Lax'}${maxAge ? `; Max-Age=${maxAge}` : ''}`;
   res.setHeader('Set-Cookie', [...(res.getHeader('Set-Cookie') || []), c]);
 };
 const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
@@ -94,7 +99,7 @@ const seesUser = (u, t) => isAdmin(u) || t.role === 'pending' || (t.districts ||
 const pub = u => ({ id: u.id, name: u.name, role: u.role, districts: u.districts || [], discordId: u.discordId || '', dname: u.dname || '', dun: u.dun || '', avatar: u.avatar || null, created: u.created, hasPwd: !!u.hash });
 const authed = req => { const t = readTok(cookies(req).sid); return t ? db.users.find(u => u.id === t.u) || null : null; };
 const PWD = !(DC.id && DC.secret) || !!(C.passwordLogin || process.env.PASSWORD_LOGIN); // identifiant + mot de passe : seulement si Discord n'est pas configuré (ou secours activé)
-const flags = () => ({ discord: !!(DC.id && DC.secret), redirect: REDIRECT, pwd: PWD });
+const flags = () => ({ discord: !!(DC.id && DC.secret), redirect: REDIRECT, pwd: PWD, ig: FK_ON });
 const payload = (u, dq) => { const d = pickD(u, dq); return { ...flags(), v: db.v, d, districts: dOf(u), sv: d ? db.svs[d] || 0 : 0, me: pub(u), roles: db.roles, state: canRead(u) && d ? db.states[d] ?? null : undefined, users: canManage(u) ? db.users.filter(t => seesUser(u, t)).map(pub) : undefined }; };
 const adminView = u => ({ v: db.v, users: db.users.filter(t => !u || seesUser(u, t)).map(pub), roles: db.roles });
 
@@ -246,6 +251,38 @@ function upsertDiscord(pf) {
   }
   u.dname = pf.global_name || pf.username || ''; u.dun = pf.username || ''; u.avatar = pf.avatar || null; touch(); return u;
 }
+// ---------- « Se connecter IG » (SSO FolkOS) : GET /api/folkos?folkos_ticket=…&next=… ----------
+const NONCE_PREFIX = 'fbfa_sso_' + FK.clientId.toLowerCase().replace(/[^a-z0-9-]/g, '-') + '_';
+const noncesFolkos = h => String(h || '').split(';').map(x => x.trim()).filter(x => x.startsWith(NONCE_PREFIX)).map(x => x.slice(x.indexOf('=') + 1)).filter(v => v.length >= 16 && v.length <= 128).slice(-16); // jamais journalisés
+async function verifierTicket(ticket, nonces) {
+  let r; try {
+    r = await fetch(FK.idBase + '/sso/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ client_id: FK.clientId, client_secret: FK.secret, token: ticket, nonces }) });
+  } catch (e) { console.error('[FolkOS] id injoignable :', e.message); return null; }
+  const d = await r.json().catch(() => null);
+  if (!r.ok || !d || !d.valid || !d.identity) { console.warn('[FolkOS] refus :', r.status, d && d.error, d && d.nonce_check); return null; } // ni ticket ni nonces dans les journaux
+  return d.identity;
+}
+const cheminSur = (v, def = '/') => { v = String(v || ''); return v.startsWith('/') && !v.startsWith('//') && v.length <= 512 && !/[\\\s]/.test(v) && !/^\/(api|discord\.php|auth)(\/|\?|$)/.test(v) ? v : def; };
+async function folkosLogin(req, res, url) {
+  const go = loc => { res.writeHead(302, { Location: loc, 'Cache-Control': 'no-store, max-age=0' }); res.end(); };
+  const fail = c => go(BASE + '/?dc=' + c);
+  if (!FK_ON) return fail('igconf');
+  const ticket = url.searchParams.get('folkos_ticket'); if (!ticket) return fail('ig');
+  const id = await verifierTicket(ticket, noncesFolkos(req.headers.cookie)).catch(() => null);
+  if (!id) return fail('ig');
+  const did = id.discord_id != null ? String(id.discord_id) : '';
+  if (!/^\d{15,22}$/.test(did)) return fail('ignodiscord'); // les comptes sont retrouvés par ID Discord (jamais par « sub »)
+  let u = db.users.find(x => x.discordId === did);
+  if (!u) { // inconnu : compte « En attente », validé ensuite par un administrateur (comme la connexion Discord)
+    let name = String(id.discord_name || id.name || 'joueur').replace(/\s+/g, '_').slice(0, 28); if (name.length < 2) name = 'joueur_' + did.slice(-4);
+    if (db.users.some(x => x.name.toLowerCase() === name.toLowerCase())) name += '#' + did.slice(-4);
+    u = { id: uid(), name, role: db.users.length ? 'pending' : 'admin', districts: db.users.length ? [] : [...DISTRICTS], discordId: did, created: Date.now() }; db.users.push(u);
+  }
+  if (id.discord_name && !u.dname) u.dname = String(id.discord_name);
+  touch(); login(res, u, true);
+  const to = cheminSur(url.searchParams.get('next'), '/');
+  go(BASE + to + (to.includes('?') ? '&' : '?') + '_sso=' + crypto.randomBytes(4).toString('hex')); // paramètre jetable : évite une vieille page en cache
+}
 async function discordCb(req, res, url) {
   const back = c => { res.writeHead(302, { Location: './?dc=' + c }); res.end(); };
   const st = url.searchParams.get('state'), code = url.searchParams.get('code'), ck = cookies(req).dst; setCookie(res, 'dst', '', -1);
@@ -265,23 +302,29 @@ async function discordCb(req, res, url) {
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webp': 'image/webp' };
 function serveStatic(req, res, p) {
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
-  let rel = decodeURIComponent(p); if (rel === '/') rel = '/index.html';
+  let rel = decodeURIComponent(p); if (rel === '/' || TAB_PATHS.test(rel)) rel = '/index.html';
   const file = path.normalize(path.join(ROOT, rel));
   const blocked = !file.startsWith(ROOT + path.sep) || /(^|[\\/])(data|node_modules|\.[^\\/]*)([\\/]|$)/.test(path.relative(ROOT, file)) || ['server.js', 'config.json', 'package.json'].includes(path.basename(file)) || !MIME[path.extname(file).toLowerCase()];
   if (blocked) { res.writeHead(404); return res.end('Introuvable'); }
   fs.readFile(file, (e, buf) => {
     if (e) { res.writeHead(404); return res.end('Introuvable'); }
+    if (rel === '/index.html' && FK.host) { // SDK du jeu (clavier, Échap, barre d'adresse) — ignorés hors FiveM
+      const h = FK.host.replace(/"/g, '');
+      buf = Buffer.from(String(buf).replace('</head>', `<script src="${h}/fbfa-game.js"></script>\n<script>window.FBFAGame && FBFAGame.init({ typing: { mode: 'field' }, escape: (location.ancestorOrigins || [])[0] !== ${JSON.stringify(h)} });</script>\n<script src="${h}/fbfa-bridge.js" async></script>\n</head>`));
+    }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()], 'Cache-Control': 'no-cache' }); res.end(req.method === 'HEAD' ? undefined : buf);
   });
 }
 
 const server = http.createServer(async (req, res) => {
+  res.setHeader('Content-Security-Policy', CSP); res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin'); // toutes les réponses (affichage en jeu)
   try {
     if (!FIXED && req.headers.host) { // adresse publique vue par le visiteur (ex. https://xxxx.trycloudflare.com)
       const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() || 'http', host = String(req.headers['x-forwarded-host'] || req.headers.host).split(',')[0].trim();
       if (/^[\w.-]+(:\d+)?$/.test(host)) { const nb = `${proto === 'https' ? 'https' : 'http'}://${host}`; if (nb !== BASE && !/localhost|127\.0\.0\.1/.test(host)) console.log(`\n  Adresse publique : ${nb}\n  → URL de redirection à mettre dans le portail Discord : ${nb}/discord.php\n`); BASE = nb; REDIRECT = BASE + '/discord.php'; SECURE = BASE.startsWith('https'); }
     }
     const url = new URL(req.url, BASE), p = url.pathname;
+    if (p === '/api/folkos') return await folkosLogin(req, res, url);
     if (p === '/api.php') return await api(req, res, url, '/api/' + (url.searchParams.get('r') || '').replace(/^\/+/, ''));
     if (p === '/discord.php') return url.searchParams.has('code') || url.searchParams.has('error') ? await discordCb(req, res, url) : discordStart(req, res);
     if (p.startsWith('/api/')) return await api(req, res, url, p);

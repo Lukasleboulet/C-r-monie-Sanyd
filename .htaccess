@@ -1,5 +1,15 @@
 # SAMP · Sandy Shore — hébergement PHP (InfinityFree, etc.)
 DirectoryIndex index.php index.html
+# affichage dans l'ordinateur du jeu (FolkOS / FiveM)
+<IfModule mod_headers.c>
+  Header always set Content-Security-Policy "frame-ancestors 'self' https://*.fbfa.fr https://fbfa.fr https://cfx-nui-external-iframe nui://game nui:"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+# une adresse par onglet (/ceremonie…) : même page
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^(effectifs|heures|importer|ceremonie|statistiques|medailles|personnalisation|acces|gestion-medailles)/?$ index.php [L]
+</IfModule>
 Options -Indexes
 # Fichiers à ne jamais servir
 <FilesMatch "^(lib\.php|config\.php|config\.example\.php|server\.js|seed\.json|package\.json|config\.json|LISEZ-MOI\.md|\.gitignore)$">

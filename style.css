@@ -418,7 +418,7 @@ html.light .mcard2{background:var(--lsoft)}
 .frm.srow .btn.del{justify-self:end}
 fieldset.ro .btn{display:inline-flex;visibility:hidden}
 /* cases à cocher centrées verticalement dans les tableaux (plus de décalage dû à la ligne de texte) */
-.chk{vertical-align:middle}td.ck{line-height:0}
+.chk{vertical-align:middle}
 .cer td{vertical-align:middle}.cer td>.cs,.cer td>input{vertical-align:middle}
 td.ck>.chk{display:flex;justify-content:center;align-items:center}
 .cer td.hc{text-align:center;white-space:nowrap;min-width:48px}
@@ -556,3 +556,4 @@ html[data-d]:not([data-d="sandy"]) .btn:not(.gold):not(.ghost):not(.del):not(.dc
 .tli.mu>i{background:var(--acc2);box-shadow:0 0 0 3px rgba(var(--accr),.25)}
 select.mutsel{width:130px;margin-right:8px}
 .mrk{display:flex;align-items:center;gap:6px;margin-top:5px}.mrk .tag{font-size:.6rem}
+.tbx .mcard{width:min(760px,94vw)}.tbx textarea{width:100%;min-height:300px;box-sizing:border-box;font:12px/1.5 var(--mono);margin:6px 0 4px}.lig{margin:0 0 12px;text-align:center}

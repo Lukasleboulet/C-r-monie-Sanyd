@@ -245,6 +245,9 @@ function vAcc() { // Administration › Accès & comptes : demandes d'accès, co
   return usersPanel() + (admin ? rolesPanel() : '');
 }
 
+const SLUG = { eff: 'effectifs', hrs: 'heures', imp: 'importer', cer: 'ceremonie', sta: 'statistiques', med: 'medailles', set: 'personnalisation', acc: 'acces', mda: 'gestion-medailles' };
+const tabFromPath = () => { const p = location.pathname.replace(/^\/+|\/+$/g, ''); return Object.keys(SLUG).find(k => SLUG[k] === p) || null; };
+function syncPath() { if (!tab || !SLUG[tab] || location.protocol === 'file:') return; const want = '/' + SLUG[tab]; if (location.pathname !== want) try { history.replaceState(null, '', want + location.search.replace(/([?&])(_sso|_cb)=[^&]*&?/g, '$1').replace(/[?&]$/, '')); } catch (e) {} }
 const views = { eff: vEff, hrs: vHrs, imp: vImp, cer: vCer, set: vSet, sta: vSta, med: vMedMain, acc: vAcc, mda: vMda };
 const TITLES = { eff: 'Effectifs', hrs: 'Heures de service', imp: 'Importer des heures', cer: 'Cérémonie', set: 'Personnalisation', sta: 'Statistiques agent', med: 'Médailles & rubans', acc: 'Accès & comptes', mda: 'Gestion des médailles' };
 const TSUB = { eff: 'Liste des agents du district, grades et matricules', hrs: 'Saisie et suivi des heures de service semaine par semaine', imp: 'Import en masse des heures depuis ta feuille', cer: 'Décisions, sanctions et notes de la cérémonie', set: 'Grades, options de décision, sanctions et rangs masqués', sta: 'Heures, grades, sanctions et historique de chaque agent depuis le début', med: 'Rubans de service à remettre et médailles des agents', acc: 'Demandes d’accès, comptes utilisateurs, rôles et permissions', mda: 'Catalogue des médailles et rubans, synchronisation avec le Google Sheet' };
@@ -256,7 +259,7 @@ function render() {
   $('#pt').textContent = tab ? TITLES[tab] : 'Accès restreint';
   $('#psub').textContent = tab ? (tab === 'eff' ? `${actv().length} agent(s) en service · ` : '') + TSUB[tab] : 'Aucun onglet n’est autorisé pour ton rôle.';
   $('#pic').innerHTML = tab ? `<svg viewBox="0 0 24 24">${TICON[tab]}</svg>` : '';
-  setKpi();
+  setKpi(); syncPath();
   $('#view').innerHTML = tab ? (() => { try { return views[tab](); } catch (e) { console.error(e); return `<section class="panel"><h2>Erreur d’affichage</h2><p class="note">Cet onglet n’a pas pu s’afficher : ${esc(e.message)}. Recharge la page (Ctrl + F5) ; si ça continue, envoie ce message.</p></section>`; } })() : me?.role === 'pending'
     ? `<section class="panel"><h2>Compte en attente de validation</h2><p class="note">Tu es connecté avec Discord, mais aucun rôle ne t’a encore été attribué. Communique ton ID Discord à un administrateur : <b class="mono">${esc(me.discordId || '')}</b></p></section>`
     : me && !myD.length ? '<section class="panel"><h2>Aucun district attribué</h2><p class="note">Ton compte n’a accès à aucun district. Demande à un administrateur de t’attribuer ton district (Mission Row, Vespucci, Alta, Sandy Shore ou Roxwood).</p></section>'
@@ -265,7 +268,7 @@ function render() {
   if (me) { $('#un').textContent = me.name; $('#ur').textContent = roleOf(me).name; { const dp = me.dname ? (me.dun ? '@' + me.dun : me.dname) : ''; $('#ud').textContent = dp; $('#ud').hidden = !dp; } { const av = me.discordId && me.avatar ? `https://cdn.discordapp.com/avatars/${me.discordId}/${me.avatar}.png?size=64` : ''; $('#uav').style.backgroundImage = av ? `url(${av})` : ''; $('#uav').textContent = av ? '' : me.name.slice(0, 2); } $('#ucard').classList.toggle('adm', admin); $('#rn').textContent = roleOf(me).name; $('#rl').textContent = admin ? 'accès total' : `${roleOf(me).tabs.length} onglet(s) · ${(roleOf(me).perms || []).length} permission(s)`; }
   setTopH();
   $('#pw').hidden = !pwdOn;
-  $('#bk').hidden = !can('dataBackup'); $('#rz').hidden = $('#rs').parentElement.hidden = !can('dataReset');
+  $('#bk').hidden = !can('dataBackup'); $('#rz').hidden = $('#rsb').hidden = !can('dataReset');
 }
 function setKpi() {
   const kw = [...S.weeks.keys()].reverse().find(j => actv().some(a => a.w[j] > 0)) ?? S.weeks.length - 1;
@@ -290,9 +293,9 @@ function dlg({ title = '', msg = '', input = null, password = false, ok = 'OK', 
     $('#dc').hidden = cancel === null; $('#dc').textContent = cancel ?? '';
     f.classList.toggle('dng', danger); m.hidden = false;
     if (input != null) { inp.focus(); inp.select(); } else $('#dok').focus();
-    const esc = e => { if (e.key === 'Escape') done(null); };
-    const done = v => { m.hidden = true; f.onsubmit = $('#dc').onclick = m.onmousedown = null; document.removeEventListener('keydown', esc); res(v); };
-    document.addEventListener('keydown', esc);
+    const esc = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); } }; // consommée : en jeu, Échap ne ferme pas l'ordinateur
+    const done = v => { m.hidden = true; f.onsubmit = $('#dc').onclick = m.onmousedown = null; document.removeEventListener('keydown', esc, true); res(v); };
+    document.addEventListener('keydown', esc, true);
     f.onsubmit = e => { e.preventDefault(); done(input != null ? inp.value : true); };
     $('#dc').onclick = () => done(null);
     m.onmousedown = e => { if (e.target === m) done(null); };
@@ -583,10 +586,35 @@ document.addEventListener('click', e => { const h = e.target.closest('.sh'); if 
 $('#sq').addEventListener('input', e => { const q = norm(e.target.value); document.querySelectorAll('#nav button[data-t]').forEach(b => b.classList.toggle('nf', !!q && !norm(b.textContent).includes(q))); }); // recherche de page
 
 // sauvegarde / restauration / reset
-$('#bk').onclick = () => {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' }));
-  a.download = 'samp-sandy-shore-sauvegarde.json'; a.click();
+// grande zone de texte (sauvegarde à copier / à coller) : fenêtre ajoutée sur document.body, comme les autres fenêtres
+function textBox({ title, msg, text = '', readonly = false, ok = 'OK', extra = null }) {
+  return new Promise(res => {
+    const m = document.createElement('div'); m.className = 'modal tbx';
+    m.innerHTML = `<form class="mcard"><h3></h3><p></p><textarea spellcheck="false"></textarea><div class="mbtns">${extra ? `<button type="button" class="btn ghost" data-x="extra"></button>` : ''}<button type="button" class="btn ghost" data-x="no">Fermer</button><button type="submit" class="btn gold"></button></div></form>`;
+    m.querySelector('h3').textContent = title; m.querySelector('p').textContent = msg; const ta = m.querySelector('textarea'); ta.value = text; ta.readOnly = readonly;
+    m.querySelector('[type=submit]').textContent = ok; if (extra) m.querySelector('[data-x=extra]').textContent = extra.label;
+    const done = v => { document.removeEventListener('keydown', esc, true); m.remove(); res(v); };
+    const esc = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); } };
+    document.addEventListener('keydown', esc, true);
+    m.querySelector('form').onsubmit = e => { e.preventDefault(); done(ta.value); };
+    m.querySelector('[data-x=no]').onclick = () => done(null);
+    if (extra) m.querySelector('[data-x=extra]').onclick = () => extra.run(ta, done);
+    document.body.appendChild(m); (readonly ? ta.select() : ta.focus());
+  });
+}
+$('#bk').onclick = async () => { // sauvegarde : texte à copier (+ fichier hors jeu)
+  const txt = JSON.stringify(S, null, 2);
+  const r = await textBox({ title: 'Sauvegarde · ' + dName(DD || curD), msg: 'Copie ce texte et garde-le (bloc-notes, Discord…). Pour restaurer : menu Restaurer, puis colle-le.', text: txt, readonly: true, ok: 'Copier',
+    extra: { label: 'Télécharger le fichier', run: () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'application/json' })); a.download = `samp-${DD || 'district'}-sauvegarde.json`; document.body.appendChild(a); a.click(); a.remove(); } } });
+  if (r != null) { try { await navigator.clipboard.writeText(txt); } catch (e) { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (x) {} ta.remove(); } }
+};
+$('#rsb').onclick = async () => { // restauration : coller la sauvegarde (+ fichier hors jeu)
+  if (!can('dataReset')) return;
+  const txt = await textBox({ title: 'Restaurer · ' + dName(DD || curD), msg: 'Colle ici le texte de la sauvegarde. Les données actuelles de ce district seront remplacées.', ok: 'Restaurer',
+    extra: { label: 'Choisir un fichier…', run: () => $('#rs').click() } });
+  if (txt == null || !txt.trim()) return;
+  try { const d = JSON.parse(txt); if (!d.weeks || !d.agents) throw 0; S = migrate(d); upd(); await dlg({ title: 'Restauration terminée', msg: 'Les données ont été restaurées.', cancel: null, icon: 'info' }); }
+  catch (err) { await dlg({ title: 'Restauration impossible', msg: 'Ce texte n’est pas une sauvegarde valide.', cancel: null, icon: 'warn' }); }
 };
 $('#rs').onchange = async e => {
   if (!can('dataReset')) return;
@@ -704,20 +732,22 @@ async function sync() { // toutes les 4 s : récupère les changements des autre
     applyPayload(r.json); softRender();
   } catch (e) { setSync('off', 'Serveur injoignable — nouvelle tentative…'); }
 }
-{ const Q = new URLSearchParams(location.search), q = Q.get('dc'), why = Q.get('why'); if (q) { history.replaceState(null, '', location.pathname); dcMsg = { denied: 'Connexion Discord annulée ou refusée.', state: 'Connexion Discord invalide : réessaie.', error: 'Connexion Discord impossible : réessaie.', conf: 'Discord n’est pas configuré sur le serveur (voir LISEZ-MOI).' }[q] || ''; if (dcMsg && why) dcMsg += ' (' + why + ')'; } }
+{ const Q = new URLSearchParams(location.search), q = Q.get('dc'), why = Q.get('why'); if (q) { history.replaceState(null, '', location.pathname); dcMsg = { ig: 'Connexion IG refusée ou expirée : rouvre le site depuis l’ordinateur du jeu.', igconf: 'La connexion IG n’est pas encore configurée sur le serveur.', ignodiscord: 'Connexion IG : aucun compte Discord n’est lié à ton personnage.', denied: 'Connexion Discord annulée ou refusée.', state: 'Connexion Discord invalide : réessaie.', error: 'Connexion Discord impossible : réessaie.', conf: 'Discord n’est pas configuré sur le serveur (voir LISEZ-MOI).' }[q] || ''; if (dcMsg && why) dcMsg += ' (' + why + ')'; } }
 async function load() {
   { try { curD = localStorage.getItem(KEY + '-d') || null; } catch (e) {} }
   let j; try { j = (await api('GET', '/api/boot' + (curD ? '?d=' + curD : ''))).json; } catch (e) { j = null; }
   if (!j) { setSync('off', 'Serveur injoignable'); firstRun = false; showLogin(); $('#le').textContent = 'Serveur injoignable : vérifie que api.php est bien en ligne (hébergement PHP) ou lance « node server.js ».'; return; }
   firstRun = !!j.firstRun; discordOn = !!j.discord; pwdOn = j.pwd !== false; redirUrl = j.redirect || '';
   if (!j.me) { me = null; admin = false; users = []; roles = []; render(); showLogin(); if (dcMsg) $('#le').textContent = dcMsg; return; }
-  applyPayload(j); setSync('ok', 'Synchronisé avec le serveur'); $('#login').hidden = true; tab = TABS.find(canTab) || null; render();
+  applyPayload(j); setSync('ok', 'Synchronisé avec le serveur'); $('#login').hidden = true; { const t = tabFromPath(); tab = t && canTab(t) ? t : TABS.find(canTab) || null; } render();
 }
+const IN_GAME = Array.from(location.ancestorOrigins || []).some(o => /cfx-nui-external-iframe|\.fbfa\.fr$|\/\/fbfa\.fr$/.test(o)); // affiché dans l'ordinateur du jeu
 function showLogin() {
   $('#lt').textContent = firstRun ? 'Création du compte administrateur' : 'Connexion';
   $('#ls').textContent = firstRun ? 'Aucun compte n’existe encore : le premier compte sera administrateur (identifiant ou Discord).' : 'Accès réservé aux membres enregistrés.';
   $('#lc').hidden = !firstRun || !pwdOn; $('#lb').textContent = firstRun ? 'Créer le compte' : 'Se connecter';
   document.querySelectorAll('#lf .fld:not(#lc), #lf .lrem, #lb, #lf .lsep').forEach(e => e.hidden = !pwdOn); // Discord uniquement
+  $('#ld').hidden = IN_GAME; $('#lig').hidden = !IN_GAME; // en jeu : connexion IG (automatique depuis l'ordinateur), pas de redirection Discord
   if (!pwdOn) $('#ls').textContent = firstRun ? 'Aucun compte n’existe encore : le premier compte connecté avec Discord sera administrateur.' : 'Connecte-toi avec ton compte Discord.';
   $('#lu').value = $('#lp').value = $('#lp2').value = ''; $('#le').textContent = ''; $('#login').hidden = false; if (pwdOn) $('#lu').focus();
 }
@@ -964,7 +994,7 @@ function vMed(part) {
   const cat = `<section class="panel"><div class="ph"><h2>Médailles & rubans</h2><span class="note">Rubans : attribués automatiquement selon l’ancienneté (date d’arrivée). Médailles : attribuées à la main.</span></div><div class="mcat">` +
     S.medals.map(md => { const n = actv().filter(a => medState(a, md).earned).length; return `<div class="mcard2">${medIcon(md, 'big')}<div class="mci">${ed ? `<input data-a="mname" data-id="${md.id}" value="${esc(md.name)}">` : `<b>${esc(md.name)}</b>`}
       <div class="frm">${ed ? `<select data-a="mauto" data-id="${md.id}"><option value="0" ${md.n ? '' : 'selected'}>Attribution manuelle</option><option value="1" ${md.n ? 'selected' : ''}>Ancienneté</option></select>${md.n ? `<input type="number" min="1" class="mdn" data-a="mn" data-id="${md.id}" value="${md.n}"><select data-a="mu" data-id="${md.id}">${uOpts(md.u || 'm')}</select>` : ''}` : `<span class="note">${md.n ? `Ancienneté ${durTxt(md)}` : 'Attribution manuelle'}</span>`}<span class="note">${n} agent(s)</span></div>
-      ${ed ? `<div class="frm">${md.img ? '' : `<input type="color" class="col" data-a="mcolor" data-id="${md.id}" value="${md.color || '#b8a47c'}" title="Couleur (sans image)">`}<label class="btn ghost">${md.img ? 'Changer l’image' : 'Image…'}<input type="file" accept="image/*" data-a="mimg" data-id="${md.id}" hidden></label>${md.img ? `<button class="btn ghost" data-a="mimgdel" data-id="${md.id}">Retirer l’image</button>` : ''}<button class="btn del" data-a="mdel" data-id="${md.id}">Supprimer</button></div>` : ''}</div></div>`; }).join('') + `</div>` +
+      ${ed ? `<div class="frm">${md.img ? '' : `<input type="color" class="col" data-a="mcolor" data-id="${md.id}" value="${md.color || '#b8a47c'}" title="Couleur (sans image)">`}<label class="btn ghost">${md.img ? 'Changer l’image' : 'Image…'}<input type="file" accept="image/*" data-a="mimg" data-id="${md.id}" hidden></label><button class="btn ghost" data-a="mimgurl" data-id="${md.id}" title="Utiliser l’adresse web d’une image (conseillé en jeu)">Image par lien</button>${md.img ? `<button class="btn ghost" data-a="mimgdel" data-id="${md.id}">Retirer l’image</button>` : ''}<button class="btn del" data-a="mdel" data-id="${md.id}">Supprimer</button></div>` : ''}</div></div>`; }).join('') + `</div>` +
     (ed ? `<div class="frm" style="margin-top:12px"><input id="mnn" placeholder="Nouvelle médaille (ex : Médaille du mérite)"><select id="mnt"><option value="0">Attribution manuelle</option><option value="1">Ancienneté</option></select><input id="mnn2" type="number" min="1" class="mdn" placeholder="Durée" title="Durée d’ancienneté"><select id="mnu">${uOpts('m')}</select><button class="btn gold" data-a="madd">Ajouter</button></div>` : '') + `</section>`;
   const tbl = `<section class="panel"><div class="ph"><h2>Agents</h2><input id="mq" placeholder="Rechercher…" value="${esc(mq)}" style="width:260px"></div><div class="wrapt"><table><thead><tr><th>Agent</th><th>Arrivée</th><th>Ancienneté</th><th>Médailles & rubans</th><th>Prochain ruban</th>${ed && manual.length ? '<th>Attribuer</th>' : ''}</tr></thead><tbody id="mtb">` +
     list.map(a => { const nx = S.medals.filter(m => m.n).map(md => ({ md, s: medState(a, md) })).filter(o => o.s.due && !o.s.earned).sort((p, q) => p.s.due.localeCompare(q.s.due))[0];
@@ -995,7 +1025,7 @@ function medImg(file) { // image redimensionnée (96 px max) pour rester légèr
 document.addEventListener('click', async e => {
   const el = e.target.closest('[data-a]'); if (!el) return; const act = el.dataset.a, id = el.dataset.id;
   if (['msync', 'mapply', 'mcancel'].includes(act) && !can('sheetSync')) return;
-  if (['mgive', 'mgiveall', 'mungive', 'mtog', 'madd', 'mdel', 'mimgdel', 'munaward'].includes(act) && !can('medalEdit')) return;
+  if (['mimgurl', 'mgive', 'mgiveall', 'mungive', 'mtog', 'madd', 'mdel', 'mimgdel', 'munaward'].includes(act) && !can('medalEdit')) return;
   const aw = (aid, mid) => (((S.awards ||= {})[aid] ||= {})[mid] ||= {});
   if (act === 'msync') doSync();
   else if (act === 'mcancel') { syncP = null; render(); }
@@ -1013,6 +1043,7 @@ document.addEventListener('click', async e => {
   else if (act === 'mgiveall') { if (await dlg({ title: 'Rubans remis', msg: 'Marquer tous les rubans en attente comme remis ?', ok: 'Confirmer' })) { actv().forEach(a => S.medals.forEach(md => { const s = medState(a, md); if (md.n && s.earned && !s.given) Object.assign(aw(a.id, md.id), { given: Date.now(), by: me?.name || '' }); })); upd(); } }
   else if (act === 'madd') { const n = $('#mnn').value.trim(); if (!n) return; const auto = $('#mnt').value === '1', dn = Math.round(+$('#mnn2').value); if (auto && !(dn > 0)) { await dlg({ title: 'Durée manquante', msg: 'Indique la durée d’ancienneté (nombre supérieur à 0).', cancel: null, icon: 'warn' }); return; } S.medals.push({ id: uid() + uid(), name: n, ...(auto ? { n: dn, u: $('#mnu').value } : {}), color: RIB_COLORS[S.medals.length % RIB_COLORS.length], img: '' }); upd(); }
   else if (act === 'mdel') { const md = S.medals.find(x => x.id === id); if (md && await dlg({ title: 'Supprimer', msg: `Supprimer « ${md.name} » ? Les attributions de cette médaille seront perdues.`, ok: 'Supprimer', danger: true })) { S.medals = S.medals.filter(x => x !== md); Object.values(S.awards || {}).forEach(o => delete o[id]); upd(); } }
+  else if (act === 'mimgurl') { const md = S.medals.find(x => x.id === id); const u = await dlg({ title: 'Image par lien', msg: 'Adresse de l’image (https://…png, .jpg, .webp ; ex. lien d’une image Discord).', input: /^https?:/.test(md?.img || '') ? md.img : '', ok: 'Enregistrer' }); if (u == null) return; const v = u.trim(); if (v && !/^https:\/\/\S+$/.test(v)) { await dlg({ title: 'Lien invalide', msg: 'Le lien doit commencer par https://', cancel: null, icon: 'warn' }); return; } md.img = v; upd(); }
   else if (act === 'mimgdel') { S.medals.find(x => x.id === id).img = ''; upd(); }
   else if (act === 'munaward') { const md = S.medals.find(x => x.id === el.dataset.m); if (await dlg({ title: 'Retirer la médaille', msg: `Retirer « ${md?.name} » à cet agent ?`, ok: 'Retirer', danger: true })) { delete S.awards?.[id]?.[el.dataset.m]; upd(); } }
 });

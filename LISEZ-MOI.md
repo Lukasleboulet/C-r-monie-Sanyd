@@ -2,6 +2,19 @@
 
 Site + **serveur** : les comptes, les rôles et les données sont stockés sur le serveur et **partagés en direct** entre tous les ordinateurs (synchronisation toutes les 4 secondes, avec fusion des modifications simultanées).
 
+## Affichage en jeu (FolkOS / FiveM) et « Se connecter IG »
+Le site respecte les règles d'affichage dans l'ordinateur du jeu : en-tête `frame-ancestors` sur toutes les réponses, cookie de session `SameSite=None; Secure` en HTTPS, aucun dialogue natif, Échap consommée par les fenêtres du site, une adresse par onglet (`/ceremonie`…), sauvegarde / restauration par copier-coller, images de médailles par lien, script des écrans dans le monde (`ingame.js`).
+
+À régler chez l'hébergeur (variables d'environnement, **jamais** dans le navigateur ni sur GitHub) :
+| Variable | Rôle |
+|---|---|
+| `BASE_URL` | adresse publique du site (ex. `https://samp.fbfa.fr`) — sert aux redirections |
+| `FOLKOS_HOST` | hôte FolkOS (ex. `https://computer.game.fbfa.fr`) : ajoute `fbfa-game.js` (clavier) et `fbfa-bridge.js` (barre d'adresse) |
+| `FOLKOS_ID_BASE`, `FOLKOS_CLIENT_ID`, `FOLKOS_CLIENT_SECRET` | fournis par FolkOS pour « Se connecter IG » |
+
+À donner à FolkOS : l'adresse de la connexion IG, `https://<ton-site>.fbfa.fr/api/folkos` (le client doit avoir le scope `discord`).
+Connexion IG : le compte est retrouvé par son **ID Discord** ; un joueur inconnu est créé **« En attente »** (à valider dans Accès & comptes). En jeu, le bouton Discord est masqué (redirection externe interdite).
+
 ## Héberger sur ton PC avec Cloudflare Tunnel (Windows) — gratuit
 1. Télécharge le projet : https://github.com/Lukasleboulet/c-r-monie-sanyd/archive/refs/heads/main.zip, puis dézippe-le (ex. `Documents\SandyShore`).
 2. Double-clique **`INSTALLER.bat`** (installe Node.js et cloudflared), puis **redémarre le PC**.

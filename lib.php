@@ -4,6 +4,7 @@
 // Les données sont stockées dans data/db.php (fichier JSON protégé : il ne s'affiche pas dans le navigateur).
 if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === 'lib.php') { http_response_code(404); exit; }
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE); ini_set('display_errors', '0');
+if (!headers_sent()) { header("Content-Security-Policy: frame-ancestors 'self' https://*.fbfa.fr https://fbfa.fr https://cfx-nui-external-iframe nui://game nui:"); header('Referrer-Policy: strict-origin-when-cross-origin'); } // affichage dans le jeu
 
 const DATA_GUARD = "<?php http_response_code(404); exit; ?>\n"; // empêche la lecture directe des fichiers de données
 const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set'];
@@ -120,7 +121,7 @@ function read_tok($t) {
   $o = json_decode(ub64u($p)); return $o && $o->e > microtime(true) * 1000 ? $o : null;
 }
 function set_cookie($name, $val, $maxAge = 0) {
-  $o = ['path' => '/', 'httponly' => true, 'samesite' => 'Lax', 'secure' => is_secure()];
+  $o = ['path' => '/', 'httponly' => true, 'samesite' => is_secure() ? 'None' : 'Lax', 'secure' => is_secure()]; // None : obligatoire dans l'iframe du jeu
   if ($maxAge) $o['expires'] = $maxAge < 0 ? 1 : time() + $maxAge;
   setcookie($name, $val, $o);
 }
