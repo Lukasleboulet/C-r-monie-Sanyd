@@ -101,7 +101,7 @@ function listHtml() {
   const q = norm(flt.q), wi = flt.w ?? S.weeks.length - 1;
   const L = sorted().filter(a => (!flt.g || a.grade === flt.g) && (!q || norm(full(a) + ' ' + a.mat).includes(q)));
   return `<div class="wrapt"><table><thead><tr><th>Matricule</th><th>Agent</th><th>Grade</th><th>Heures (semaine du ${S.weeks[wi]})</th><th></th></tr></thead><tbody>` +
-    L.map(a => `<tr><td class="mono">${can('agentEdit') ? `<input class="ein" data-a="emat" data-id="${a.id}" value="${esc(a.mat)}">` : esc(a.mat)}</td><td>${can('agentEdit') ? `<input class="ein" data-a="epre" data-id="${a.id}" value="${esc(a.prenom)}" placeholder="Prénom"> <input class="ein" data-a="enom" data-id="${a.id}" value="${esc(a.nom)}" placeholder="Nom">` : `<span class="av">${esc(((a.prenom || '')[0] || '') + ((a.nom || '')[0] || ''))}</span>${esc(full(a))}`}</td><td>${can('agentEdit') ? `<select class="ein" data-a="egr" data-id="${a.id}">${gopts(a.grade)}</select>` : badge(a.grade)}</td><td class="hcell">${F(a.w[wi])}<span class="mini"><i style="width:${Math.min(100, (a.w[wi] || 0) / BAR_MAX * 100)}%"></i></span></td><td>${can('agentEdit') && myD.filter(d => d !== DD).length ? `<select class="cin mutsel" data-a="mutsel" data-id="${a.id}" title="Mutation vers un autre district"><option value="">Muter vers…</option>${myD.filter(d => d !== DD).map(d => `<option value="${d}">${dName(d)}</option>`).join('')}</select>` : ''}${can('agentDel') ? `<button class="btn ghost" data-a="arch" data-id="${a.id}" title="Retirer de l’effectif en gardant ses statistiques">Archiver</button>` : ''}</td></tr>`).join('') +
+    L.map(a => `<tr><td class="mono">${can('agentEdit') ? `<input class="ein" data-a="emat" data-id="${a.id}" value="${esc(a.mat)}">` : esc(a.mat)}</td><td>${can('agentEdit') ? `<input class="ein" data-a="epre" data-id="${a.id}" value="${esc(a.prenom)}" placeholder="Prénom"> <input class="ein" data-a="enom" data-id="${a.id}" value="${esc(a.nom)}" placeholder="Nom">` : `<span class="av">${esc(((a.prenom || '')[0] || '') + ((a.nom || '')[0] || ''))}</span>${esc(full(a))}`}</td><td>${can('agentEdit') ? `<select class="ein" data-a="egr" data-id="${a.id}">${gopts(a.grade)}</select>` : badge(a.grade)}${a.man && ignR(a.grade) ? `<div class="mrk"><span class="tag" title="Rang masqué, mais visible car l’agent est marqué « ajouté à la main »">rang masqué · visible</span>${can('agentEdit') ? `<button class="btn ghost mini-b" data-a="unman" data-id="${a.id}">Masquer</button>` : ''}</div>` : ''}</td><td class="hcell">${F(a.w[wi])}<span class="mini"><i style="width:${Math.min(100, (a.w[wi] || 0) / BAR_MAX * 100)}%"></i></span></td><td>${can('agentEdit') && myD.filter(d => d !== DD).length ? `<select class="cin mutsel" data-a="mutsel" data-id="${a.id}" title="Mutation vers un autre district"><option value="">Muter vers…</option>${myD.filter(d => d !== DD).map(d => `<option value="${d}">${dName(d)}</option>`).join('')}</select>` : ''}${can('agentDel') ? `<button class="btn ghost" data-a="arch" data-id="${a.id}" title="Retirer de l’effectif en gardant ses statistiques">Archiver</button>` : ''}</td></tr>`).join('') +
     `</tbody></table></div>` + (L.length ? '' : '<p class="note">Aucun agent.</p>');
 }
 function vEff() {
@@ -455,6 +455,7 @@ document.addEventListener('click', async e => {
     if (await adminCall('PUT', '/api/roles', { roles: next })) render();
   }
   else if (act === 'dsel') switchD(el.dataset.d);
+  else if (act === 'unman') { if (!can('agentEdit')) return; const a = S.agents.find(x => x.id === id); if (a) { delete a.man; upd(); } }
   else if (act === 'gded') { if (!admin) return; st.ged = !st.ged; render(); }
   else if (act === 'udis') { // donner / retirer l'accès à un district
     if (!mgr()) return; const u = users.find(x => x.id === id); if (!u) return; const d = el.dataset.d, has = (u.districts || []).includes(d);
@@ -522,7 +523,7 @@ document.addEventListener('change', e => {
     adminCall('PUT', '/api/roles', { roles: next }).then(ok => { if (!ok) softRender(); });
   }
   else if (act === 'inf') { ent(el.dataset.id)[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value; save(); }
-  else if (act === 'egr') { if (!can('agentEdit')) return; const a = S.agents.find(x => x.id === el.dataset.id), old = a.grade; a.grade = el.value; if (old !== a.grade) { logGrade(a, old, a.grade, 'modification manuelle'); a.man = true; } save(); }
+  else if (act === 'egr') { if (!can('agentEdit')) return; const a = S.agents.find(x => x.id === el.dataset.id), old = a.grade; a.grade = el.value; if (old !== a.grade) logGrade(a, old, a.grade, 'modification manuelle'); save(); }
   else if (act === 'grec') { if (!can('gradeEdit')) return; (S.grecap ||= {})[S.grades[+el.dataset.i]] = el.value.trim(); save(); }
   else if (act === 'gcol') { S.gcol[S.grades[+el.dataset.i]] = el.value; upd(); }
   else if (act === 'emat' || act === 'epre' || act === 'enom') { // modifier matricule / prénom / nom

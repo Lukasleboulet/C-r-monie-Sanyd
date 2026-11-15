@@ -555,3 +555,4 @@ html[data-d]:not([data-d="sandy"]) .btn:not(.gold):not(.ghost):not(.del):not(.dc
 .gdr{display:inline-flex;align-items:center;gap:8px}.gdr input{width:150px}
 .tli.mu>i{background:var(--acc2);box-shadow:0 0 0 3px rgba(var(--accr),.25)}
 select.mutsel{width:130px;margin-right:8px}
+.mrk{display:flex;align-items:center;gap:6px;margin-top:5px}.mrk .tag{font-size:.6rem}
