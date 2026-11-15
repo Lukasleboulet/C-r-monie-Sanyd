@@ -208,7 +208,7 @@ function vCer() {
 // Récap au format du message Discord de la cérémonie :
 // ## 🛡️ Cérémonie Alta - 05/11/2026 🛡️ / **Sergent II -> Lieutenant :** / - <@ID Discord> (Discord affiche le pseudo de l'agent)
 const DEMO = { alta: ':alta2:', vesp: ':vespucci2:', mr: ':missionrow2:', rox: ':roxwood2:', sandy: ':sandyshores2:' }; // emoji Discord du titre, par district
-const DEF_FOOT = '*Félicitation à vous !*\n-# <@1521910777588482238>';
+const DEF_FOOT = '*Félicitation à vous !*\n-# @👮‍♂️〃Secrétaire de Tuco';
 const cerEmo = () => S.cerEmoji ?? DEMO[DD || curD] ?? '';
 const gTxt = g => (S.grecap?.[g] || '').trim() || g; // nom du grade dans le récap (peut contenir un emoji Discord)
 const who = a => `${a.did ? `<@${a.did}> - ` : ''}${a.mat && a.mat !== '-' ? a.mat : '?'} | ${a.nom || ''} ${a.prenom || ''}`.trim();
