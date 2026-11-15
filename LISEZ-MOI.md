@@ -64,6 +64,10 @@ Cinq districts, chacun avec **ses propres données** (agents, heures, cérémoni
 ## Cérémonie : qui voit quoi
 Sans la permission **« Voir tous les grades »** (Administration › Accès & comptes › Permissions › Cérémonie), un compte ne voit dans l'onglet Cérémonie (tableau, récap, validation) **que les agents de son grade et en dessous** (les autres onglets ne sont pas concernés) : un SLO ne voit pas les Sergent-1 et plus. Le grade du compte est **le nom de son rôle** quand il correspond à un grade (rôle « SLO » = grade SLO ; bouton « Créer les rôles de SLO à Capitaine »), sinon celui de sa fiche agent reliée par l'**ID Discord**. Sans l'un ni l'autre, il ne voit pas la cérémonie. Les administrateurs voient tout.
 
+## Mutations et dates de grade
+- **Mutation** : si le Google Sheet indique un autre district pour un agent, la synchro propose « Mutation vers … » (au lieu de l'archiver). L'agent, ses heures (semaine par semaine), son historique, ses médailles et ses cérémonies passent dans l'autre district, avec « Mutation X → Y » dans son historique. À la main : menu « Muter vers… » dans Effectifs.
+- **Dates de grade** : l'historique (Statistiques) affiche les dates lues dans les colonnes de grades du Sheet. Un administrateur peut les corriger (« Modifier les dates ») ; une date corrigée n'est plus remplacée par le Sheet.
+
 ## Rôles et permissions (Administration › Accès & comptes — administrateurs)
 - **Onglets accessibles** par rôle : Effectifs, Heures, Importer, Cérémonie, Statistiques, Paramètres (grades, options de décision, sanctions).
 - **Permissions** par rôle (bouton « tout » pour tout cocher) :
