@@ -175,17 +175,20 @@ function decTxt(x, cur) {
 // Le grade du compte = celui de sa fiche agent dans ce district (même ID Discord que le compte, lu dans le Google Sheet).
 const myAgent = () => me?.discordId ? S.agents.find(a => a.did === me.discordId) || null : null;
 const cerAllowAll = () => admin || can('cerAll');
+// niveau de visibilité : 1) rôle portant le nom d'un grade (ex. rôle « SLO »), 2) sinon grade de la fiche agent reliée par l'ID Discord
+const roleGrade = () => { const k = x => norm(x).replace(/[^a-z0-9]/g, ''), n = k(roleOf(me || {}).name || ''); return n ? S.grades.find(g => k(g) === n) || null : null; };
+const myLevel = () => roleGrade() || myAgent()?.grade || null;
 function canSeeCer(a) {
   if (cerAllowAll()) return true;
-  const m = myAgent(); if (!m) return false;
+  const lv = myLevel(); if (!lv) return false;
   const D = S.ceremonies[S.weeks[cw ?? S.weeks.length - 1]] || {}, d = D[a.id] || {};
-  return gi(d.done ? d.from : a.grade) >= gi(m.grade); // indice plus grand = grade plus bas
+  return gi(d.done ? d.from : a.grade) >= gi(lv); // indice plus grand = grade plus bas
 }
 const cerN = () => Math.min(4, Math.max(2, S.cerN || 3)); // nombre de semaines de la cérémonie (3 par défaut)
 function vCer() {
   if (cw == null || cw >= S.weeks.length) cw = S.weeks.length - 1;
   const j = cw, wk = S.weeks[j], D = S.ceremonies[wk] || {}, N = cerN(), win = [...Array(N).keys()].map(k => j - N + 1 + k), nOk = win.filter(i => i >= 0).length || 1; // N semaines : S-1 (la plus ancienne) … S-N (semaine choisie)
-  if (!cerAllowAll() && !myAgent()) return `<section class="panel"><h2>Cérémonie</h2><p class="note">Ton compte n’est relié à aucune fiche agent dans ce district : impossible de savoir ton grade. La fiche agent doit avoir le même ID Discord que ton compte (colonne « ID discord » du Google Sheet, puis synchronisation). Demande à un administrateur.</p></section>`;
+  if (!cerAllowAll() && !myLevel()) return `<section class="panel"><h2>Cérémonie</h2><p class="note">Impossible de savoir ton grade : ton rôle ne porte pas le nom d’un grade (ex. « SLO ») et ton compte n’est relié à aucune fiche agent (même ID Discord). Demande à un administrateur de te donner le rôle de ton grade.</p></section>`;
   const rows = sorted().filter(canSeeCer).map(a => {
     const hs = win.map(i => i >= 0 ? a.w[i] : null), d = D[a.id] || {}, on = !!d.a, lock = !can('cerEdit') || (d.done && !can('cerEditDone'));
     const gi0 = S.grades.indexOf(d.done ? d.from : a.grade), gk = S.grades.indexOf(d.g || ''), cls = !on ? '' : gk < 0 || gk === gi0 ? 'dec' : gk < gi0 ? 'up' : 'down';
@@ -372,7 +375,7 @@ function decide(id, patch) {
 document.addEventListener('click', async e => {
   const el = e.target.closest('[data-a]'); if (!el) return;
   const act = el.dataset.a, id = el.dataset.id;
-  if (['radd', 'rdel', 'rall', 'rup', 'rdn'].includes(act) && !admin) return;
+  if (['radd', 'rdel', 'rall', 'rup', 'rdn', 'rgrades'].includes(act) && !admin) return;
   if (['udel', 'uadd', 'upw'].includes(act) && !mgr()) return;
   if (['del', 'arch', 'unarch'].includes(act) && !can('agentDel')) return;
   if (act === 'add' && !can('agentAdd')) return;
@@ -419,6 +422,18 @@ document.addEventListener('click', async e => {
     const u = users.find(x => x.id === id), p = await dlg({ title: 'Nouveau mot de passe', msg: `Compte « ${u.name} » · 4 caractères minimum`, input: '', password: true, ok: 'Enregistrer' });
     if (p === null) return;
     if (await adminCall('POST', `/api/users/${id}/password`, { password: p })) await dlg({ title: 'Mot de passe modifié', msg: `Le mot de passe de « ${u.name} » a été mis à jour.`, cancel: null, icon: 'info' });
+  }
+  else if (act === 'rgrades') { // un rôle par grade, de SLO à Capitaine (liste de grades du district affiché)
+    const nk = x => norm(x).replace(/[^a-z0-9]/g, ''), G = S.grades.filter(g => !ignR(g));
+    const lo = G.findIndex(g => nk(g) === 'slo'), hiI = G.findIndex(g => nk(g) === 'capitaine'), hi = hiI < 0 ? 0 : hiI;
+    if (lo < 0) { await dlg({ title: 'Grade SLO introuvable', msg: 'La liste de grades de ce district ne contient pas « SLO ».', cancel: null, icon: 'warn' }); return; }
+    const want = G.slice(Math.min(hi, lo), Math.max(hi, lo) + 1), have = new Set(roles.map(r => norm(r.name))), add = want.filter(g => !have.has(norm(g)));
+    if (!add.length) { await dlg({ title: 'Rien à créer', msg: 'Ces rôles existent déjà : ' + want.join(', ') + '.', cancel: null, icon: 'info' }); return; }
+    const tpl = roles.find(r => r.id === 'user') || { tabs: ['eff', 'hrs', 'imp', 'cer', 'sta', 'med'], perms: ['agentAdd', 'agentEdit', 'hoursEdit', 'hoursImport', 'weekAdd', 'cerEdit', 'medalEdit'] };
+    if (!(await dlg({ title: 'Créer les rôles de grades', msg: `Rôles créés (${add.length}) : ${add.join(', ')}.\n\nIls démarrent avec les onglets et permissions du rôle « ${tpl.name || 'standard'} » : ajuste-les ensuite dans le tableau.`, ok: 'Créer' }))) return;
+    const pend = roles.filter(r => r.id === 'pending'), rest = roles.filter(r => r.id !== 'pending');
+    const fresh = add.map(g => ({ id: uid() + uid(), name: g, tabs: [...(tpl.tabs || [])], perms: (tpl.perms || []).filter(x => x !== 'cerAll') }));
+    if (await adminCall('PUT', '/api/roles', { roles: [...clone(rest), ...fresh, ...clone(pend)] })) render();
   }
   else if (act === 'radd') {
     const v = $('#rnew').value.trim();
@@ -588,7 +603,7 @@ const PERM_DESC = { // petit descriptif affiché sous chaque permission (Accès 
   agentAdd: 'Ajouter un agent dans Effectifs.', agentEdit: 'Changer le matricule, le nom ou le grade d’un agent.', agentDel: 'Archiver un agent, le réintégrer ou le supprimer définitivement.',
   hoursEdit: 'Saisir ou corriger les heures dans l’onglet Heures.', hoursImport: 'Coller le tableau d’heures dans l’onglet Importer.', weekAdd: 'Créer une nouvelle semaine.',
   cerEdit: 'Choisir les décisions, sanctions, formations et notes de la cérémonie.', cerValidate: 'Appliquer les changements de grade de la cérémonie.', cerEditDone: 'Modifier une décision déjà appliquée.',
-  cerAll: 'Voir tous les agents dans l’onglet Cérémonie. Sans cette case : seulement les agents de son grade et en dessous (grade lu via l’ID Discord du compte).',
+  cerAll: 'Voir tous les agents dans l’onglet Cérémonie. Sans cette case : seulement les agents de son grade et en dessous (grade = nom du rôle, ex. « SLO », sinon fiche agent reliée par l’ID Discord).',
   gradeEdit: 'Ajouter, renommer, ordonner les grades et les rangs masqués.', actionEdit: 'Gérer les options de décision (« Passe … »).', sanctionEdit: 'Gérer la liste des sanctions.',
   usersManage: 'Valider les demandes d’accès et gérer les comptes de ses districts (sauf administrateurs).',
   medalEdit: 'Gérer les médailles, attribuer et marquer les rubans comme remis.', sheetSync: 'Lancer la synchronisation avec le Google Sheet.',
@@ -752,7 +767,7 @@ function rolesPanel() {
     `</tbody></table></div>
   <h3 class="sub">Permissions (actions)</h3><div class="wrapt"><table class="ptab2"><thead><tr><th>Permission</th>${roles.map(r => `<th class="rc">${esc(r.name)}${r.admin ? '' : `<button class="btn ghost mini-b" data-a="rall" data-id="${r.id}" title="Tout cocher / tout décocher">tout</button>`}</th>`).join('')}</tr></thead><tbody>` +
     PERM_GROUPS.map(([g, L]) => `<tr class="pgr"><td colspan="${roles.length + 1}">${g}</td></tr>` + L.map(([k, l]) => `<tr><td class="pl">${l}${PERM_DESC[k] ? `<small class="pd">${PERM_DESC[k]}</small>` : ''}</td>` + roles.map(r => box(`data-a="rperm" data-id="${r.id}" data-k="${k}"`, r.admin || (r.perms || []).includes(k), r.admin)).join('') + '</tr>').join('')).join('') +
-    `</tbody></table></div><div class="frm" style="margin-top:12px"><input id="rnew" placeholder="Nom du nouveau rôle (ex : Superviseur)"><button class="btn gold" data-a="radd">Ajouter le rôle</button></div></section>`;
+    `</tbody></table></div><div class="frm" style="margin-top:12px"><input id="rnew" placeholder="Nom du nouveau rôle (ex : Superviseur)"><button class="btn gold" data-a="radd">Ajouter le rôle</button><button class="btn ghost" data-a="rgrades" title="Crée un rôle pour chaque grade, de SLO à Capitaine (selon la liste de grades du district affiché)">Créer les rôles de SLO à Capitaine</button></div></section>`;
 }
 const avHtml = u => u.discordId && u.avatar ? `<span class="av img" style="background-image:url(https://cdn.discordapp.com/avatars/${esc(u.discordId)}/${esc(u.avatar)}.png?size=64)"></span>` : `<span class="av">${esc(u.name.slice(0, 2))}</span>`;
 function usersPanel() {
