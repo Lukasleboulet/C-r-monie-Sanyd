@@ -6,6 +6,14 @@
 'use strict';
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 
+// Fichier .env (à côté de server.js) : variables de l'hébergeur. Une variable déjà définie par l'hébergement n'est pas remplacée.
+try {
+  for (const l of require('fs').readFileSync(require('path').join(__dirname, '.env'), 'utf8').split(/\r?\n/)) {
+    const m = l.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/); if (!m || l.trim().startsWith('#')) continue;
+    let v = m[2]; if (/^(['"]).*\1$/.test(v)) v = v.slice(1, -1); else v = v.replace(/\s+#.*$/, '');
+    if (process.env[m[1]] === undefined) process.env[m[1]] = v;
+  }
+} catch (e) {}
 const ROOT = __dirname, DATA = process.env.DATA_DIR || path.join(ROOT, 'data'), DBF = path.join(DATA, 'db.json');
 fs.mkdirSync(DATA, { recursive: true });
 let C = {}; try { C = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')); } catch (e) {}
