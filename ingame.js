@@ -1,8 +1,5 @@
-// Écran dans le monde (FiveM / FolkOS) : le jeu n'envoie pas de vraies touches à la page, ce script les recrée.
-// Repris de API-NUI-EXTERNAL-IFRAME.md §2 bis (avec les deux vérifications d'origine). Hors du jeu, il ne fait rien.
 (() => {
   const RESSOURCE = "https://cfx-nui-external-iframe";
-  // Page vraiment embarquée par le jeu ? (liste fournie par le navigateur, impossible à falsifier)
   if (!Array.from(location.ancestorOrigins || []).includes(RESSOURCE)) return;
 
   const post = (route, body) =>
@@ -15,12 +12,10 @@
   const isField = (el) =>
     !!el && (el.isContentEditable || el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && !NOT_TEXT.includes(el.type)));
 
-  // Demande le clavier quand un champ prend le focus (le jeu ne l'accorde que juste après un clic).
   document.addEventListener("focusin", (e) => isField(e.target) && post("typing", { typing: true }));
   document.addEventListener("click", () => isField(document.activeElement) && post("typing", { typing: true }));
   document.addEventListener("focusout", (e) => isField(e.target) && post("typing", { typing: false }));
 
-  // Valeur posée par le setter natif.
   const setValue = (el, v) => {
     const set = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value")?.set;
     set ? set.call(el, v) : (el.value = v);
@@ -29,14 +24,14 @@
     try {
       el.setRangeText(insert, start, end, "end");
     } catch {
-      setValue(el, insert ? el.value + insert : el.value.slice(0, -1)); // number, email… : pas de sélection
+      setValue(el, insert ? el.value + insert : el.value.slice(0, -1));
     }
     el.dispatchEvent(new Event("input", { bubbles: true }));
   };
 
   window.addEventListener("message", (e) => {
     const data = e.data;
-    if (!data || e.origin !== RESSOURCE) return; // touches du jeu seulement
+    if (!data || e.origin !== RESSOURCE) return;
     const el = document.activeElement;
     if (data.type === "externalIframeTypingEnd") {
       if (isField(el)) el.blur();

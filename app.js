@@ -1,21 +1,20 @@
-// ====== SAMP · District de Sandy Shore : suivi des heures & cérémonies (site + serveur Node.js : comptes, rôles et données partagés) ======
-const DEFAULT_GRADES = ['Capitaine','Lieutenant-Chef','Lieutenant','Sergent-2','Sergent-1','SLO','Officier-3','Officier-2','Officier','Rookie']; // du plus haut au plus bas
+const DEFAULT_GRADES = ['Capitaine','Lieutenant-Chef','Lieutenant','Sergent-2','Sergent-1','SLO','Officier-3','Officier-2','Officier','Rookie'];
 const RIB_COLORS = ['#4f8ad8', '#3dbb7a', '#e0b23a', '#e0733a', '#c9473f', '#8e5bd6'];
 const defaultMedals = () => [2, 4, 6, 8, 10, 12].map((m, i) => ({ id: 'rub' + m, name: `Ruban de service — ${m} mois`, n: m, u: 'm', color: RIB_COLORS[i], img: '' }));
-const gradeAction = g => ({ id: uid() + uid(), label: 'Passe ' + g, mv: 0, to: g }); // option de décision : passage à un grade précis
-const DEFAULT_SANCTIONS = ['Avertissement', 'Blâme', 'Mise à pied']; // modifiables par l'admin (Paramètres)
+const gradeAction = g => ({ id: uid() + uid(), label: 'Passe ' + g, mv: 0, to: g });
+const DEFAULT_SANCTIONS = ['Avertissement', 'Blâme', 'Mise à pied'];
 const DIST = { mr: 'Mission Row', vesp: 'Vespucci', alta: 'Alta', sandy: 'Sandy Shore', rox: 'Roxwood' }, DIDS = Object.keys(DIST);
 const dName = d => DIST[d] || '—', dLogo = d => `assets/district-${DIST[d] ? d : 'sandy'}.png`;
-let curD = null, myD = [], DD = null; // district affiché, districts autorisés, district des données chargées
-const KEY = 'samp-sandy-shore-v1'; // clé propre à ce site (ne pas partager avec le site Vespucci)
+let curD = null, myD = [], DD = null;
+const KEY = 'samp-sandy-shore-v1';
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
 const F = m => m == null ? '–' : Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0');
-const BAR_MAX = 3000; // barres d’heures : pleines à 50h (3000 min)
+const BAR_MAX = 3000;
 const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
-function tparse(line, loose) { // "43h30min", "43:30", "43.5" -> minutes
+function tparse(line, loose) {
   const hm = [...line.matchAll(/(\d+)h(\d{1,2})?(?:min)?(?![a-z])/gi)];
   if (hm.length) { const x = hm.at(-1); return +x[1] * 60 + (+x[2] || 0); }
   const c = [...line.matchAll(/(\d+):(\d{2})/g)];
@@ -24,8 +23,7 @@ function tparse(line, loose) { // "43h30min", "43:30", "43.5" -> minutes
   return d ? Math.round(parseFloat(d[1].replace(',', '.')) * 60) : null;
 }
 
-// ---------- état ----------
-function thisMonday() { // 1re semaine d'une base vide : le lundi de la semaine en cours (jj/mm)
+function thisMonday() {
   const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
   return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
 }
@@ -34,12 +32,11 @@ function seed() {
     weeks: SEED.weeks.length ? [...SEED.weeks] : [thisMonday()],
     agents: SEED.rows.map(([mat, nom, prenom, grade, w]) => ({ id: uid(), mat, nom, prenom, grade, w })),
     grades: [...DEFAULT_GRADES], gcol: {}, sanctions: [...DEFAULT_SANCTIONS], actions: [],
-    ceremonies: {} // { "19/10": { agentId: {a: id de l’option, from, g, r, done} } }
+    ceremonies: {}
   };
 }
-// Semaines « jj/mm » sans année : on déduit l'année (une date à plus de 2 semaines dans le futur = année précédente) pour les classer par date.
 function weekKey(w) { const [d, m] = String(w).split('/').map(Number), n = new Date(); let y = n.getFullYear(); if (new Date(y, m - 1, d) - n > 14 * 864e5) y--; return y * 10000 + m * 100 + d; }
-function sortWeeks(d) { // remet les semaines dans l'ordre chronologique, avec les heures et les références qui en dépendent
+function sortWeeks(d) {
   const p = d.weeks.map((w, i) => i).sort((a, b) => weekKey(d.weeks[a]) - weekKey(d.weeks[b]) || a - b);
   if (p.every((x, i) => x === i)) return false;
   const inv = []; p.forEach((o, n) => inv[o] = n);
@@ -48,7 +45,7 @@ function sortWeeks(d) { // remet les semaines dans l'ordre chronologique, avec l
   (d.glog || []).forEach(g => { if (g.w != null && inv[g.w] != null) g.w = inv[g.w]; });
   return true;
 }
-function migrate(d) { // le grade « Rookie-PPA » n'existe pas : fusionné dans « Rookie »
+function migrate(d) {
   const fix = g => g === 'Rookie-PPA' ? 'Rookie' : g;
   d.agents.forEach(a => a.grade = fix(a.grade));
   Object.values(d.ceremonies || {}).forEach(c => Object.values(c).forEach(x => { x.from = fix(x.from); x.g = fix(x.g); }));
@@ -56,21 +53,21 @@ function migrate(d) { // le grade « Rookie-PPA » n'existe pas : fusionné dans
   d.agents.forEach(a => { if (!d.grades.includes(a.grade)) d.grades.push(a.grade); });
   d.actions ||= [];
   { const used = new Set(); Object.values(d.ceremonies || {}).forEach(c => Object.values(c).forEach(x => x.a && used.add(x.a)));
-    d.actions = d.actions.filter(x => x.to !== undefined || used.has(x.id)); // anciennes options « monte / descend » retirées (sauf si déjà utilisées dans une cérémonie)
+    d.actions = d.actions.filter(x => x.to !== undefined || used.has(x.id));
     if (!d.actions.some(x => x.to !== undefined)) d.actions.push(...d.grades.filter(g => !(d.ignRanks || ['Patron', 'Sheriff']).some(r => r.toLowerCase() === g.toLowerCase())).map(gradeAction)); }
   d.gcol ||= {};
   d.glog ||= [];
   d.medals ||= defaultMedals();
-  d.medals.forEach(m => { if (m.months && !m.n) { m.n = m.months; m.u = 'm'; } delete m.months; }); // ancienneté : nombre + unité (j, s, m, a)
+  d.medals.forEach(m => { if (m.months && !m.n) { m.n = m.months; m.u = 'm'; } delete m.months; });
   d.awards ||= {}; d.sheet ||= { url: '', gid: '', district: dName(curD || 'sandy'), gmap: {}, last: 0 };
   sortWeeks(d);
-  d.ignRanks ||= ['Patron', 'Sheriff']; // rangs ignorés à l'import et masqués (sauf agents ajoutés à la main)
+  d.ignRanks ||= ['Patron', 'Sheriff'];
   d.sanctions ||= [...DEFAULT_SANCTIONS];
   Object.values(d.ceremonies || {}).forEach(c => Object.values(c).forEach(x => ['fps', 'f1020', 'fus', 'abs'].forEach(k => { if (k in x && typeof x[k] !== 'boolean') x[k] = !!x[k] && x[k] !== 'Non'; })));
   return d;
 }
-let S = migrate(seed()); // remplacé par les données du serveur après la connexion
-let admin = false, me = null; // admin = compte au rôle « Administrateur »
+let S = migrate(seed());
+let admin = false, me = null;
 let tab = 'eff', cw = null, hw = null, hall = false, flt = { q: '', g: '' };
 
 const gi = g => { const i = S.grades.indexOf(g); return i < 0 ? 99 : i; };
@@ -81,14 +78,13 @@ const effOpts = sel => [['-2', 'Monte de 2 grades'], ['-1', 'Monte d’un grade'
 const full = a => `${a.prenom} ${a.nom}`.trim();
 const tot = a => a.w.reduce((x, y) => x + (y || 0), 0);
 const ignR = g => (S.ignRanks || []).some(x => norm(x) === norm(g || ''));
-const hiddenA = a => !a.man && ignR(a.grade); // rang masqué (Patron, Sheriff…) et agent non ajouté à la main
-const actv = () => S.agents.filter(a => !a.arch && !hiddenA(a)); // agents en service (hors archivés et rangs masqués)
+const hiddenA = a => !a.man && ignR(a.grade);
+const actv = () => S.agents.filter(a => !a.arch && !hiddenA(a));
 const byGrade = L => [...L].sort((a, b) => gi(a.grade) - gi(b.grade) || a.nom.localeCompare(b.nom));
 const sorted = () => byGrade(actv());
 const gopts = sel => [...new Set([...S.grades, ...S.agents.map(a => a.grade)])].map(g => `<option ${g === sel ? 'selected' : ''}>${esc(g)}</option>`).join('');
 const wopts = sel => S.weeks.map((w, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>Semaine du ${w}</option>`).join('');
 
-// ---------- vues ----------
 const archDate = a => new Date(a.arch.t).toLocaleDateString('fr-FR');
 function archHtml() {
   const q = norm(flt.q), L = byGrade(S.agents.filter(a => a.arch)).filter(a => (!flt.g || a.grade === flt.g) && (!q || norm(full(a) + ' ' + a.mat).includes(q)));
@@ -112,9 +108,9 @@ function vEff() {
     <select id="fg"><option value="">Tous les grades</option>${gopts(flt.g)}</select><select id="ew">${wopts(flt.w ?? S.weeks.length - 1)}</select><span class="note">${actv().length} agents</span>${S.agents.some(a => a.arch) || flt.arch ? `<button class="btn ghost${flt.arch ? ' on' : ''}" data-a="sharch">${flt.arch ? '← Effectif en service' : `Archivés (${S.agents.filter(a => a.arch).length})`}</button>` : ''}</div>
     <div id="list">${listHtml()}</div>`;
 }
-let hq = '', hg = ''; // recherche / filtre de grade de l'onglet Heures
-const minM = () => Math.round((S.minH ?? 10) * 60); // minimum d'heures par semaine (minutes)
-function hRow(a) { // une ligne de la vue « par semaine »
+let hq = '', hg = '';
+const minM = () => Math.round((S.minH ?? 10) * 60);
+function hRow(a) {
   const v = a.w[hw], p = hw > 0 ? a.w[hw - 1] : null, mn = minM(), low = v != null && v < mn, d = v != null && p != null ? v - p : null;
   return `<tr class="hr${low ? ' low' : ''}${v == null ? ' empty' : ''}" data-row="${a.id}" style="--c:${gradeColor(a.grade)}"><td><div class="hag"><span class="av">${esc(initials(a))}</span><span><b>${esc(full(a))}</b>${a.mat && a.mat !== '-' ? `<small class="mono">${esc(a.mat)}</small>` : ''}</span></div></td><td>${badge(a.grade)}</td>
     ${hw > 0 ? `<td class="hcell hprev">${F(p)}</td>` : ''}<td><input class="hin" data-a="hin" data-id="${a.id}" value="${v == null ? '' : F(v)}" placeholder="—" ${can('hoursEdit') ? '' : 'readonly'}></td>
@@ -164,30 +160,26 @@ function infoCell(a, d, [k, , t], dis) {
   if (t === 'sel') { const L = [...S.sanctions]; if (v && !L.includes(v)) L.push(v); return `<td><select class="cin" ${at}><option value="">—</option>${L.map(o => `<option ${v === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></td>`; }
   return `<td><input class="cin" type="number" min="0" ${at} value="${esc(v ?? '')}"></td>`;
 }
-// texte d'une option dans la cérémonie : grade visé avec ▲ (montée), ▼ (descente) ou = (même grade) par rapport au grade actuel
 function decTxt(x, cur) {
   if (x.to === undefined) return `${sym(x)} ${x.label}`;
   const i = S.grades.indexOf(cur), k = S.grades.indexOf(x.to), def = x.label === 'Passe ' + x.to;
   const ar = i < 0 || k < 0 ? '→' : k < i ? '▲' : k > i ? '▼' : '=';
   return `${ar} ${def ? x.to : x.label}`;
 }
-// Cérémonie : sans « Voir tous les grades », on ne voit que les agents de son grade et en dessous.
-// Le grade du compte = celui de sa fiche agent dans ce district (même ID Discord que le compte, lu dans le Google Sheet).
 const myAgent = () => me?.discordId ? S.agents.find(a => a.did === me.discordId) || null : null;
 const cerAllowAll = () => admin || can('cerAll');
-// niveau de visibilité : 1) rôle portant le nom d'un grade (ex. rôle « SLO »), 2) sinon grade de la fiche agent reliée par l'ID Discord
 const roleGrade = () => { const k = x => norm(x).replace(/[^a-z0-9]/g, ''), n = k(roleOf(me || {}).name || ''); return n ? S.grades.find(g => k(g) === n) || null : null; };
 const myLevel = () => roleGrade() || myAgent()?.grade || null;
 function canSeeCer(a) {
   if (cerAllowAll()) return true;
   const lv = myLevel(); if (!lv) return false;
   const D = S.ceremonies[S.weeks[cw ?? S.weeks.length - 1]] || {}, d = D[a.id] || {};
-  return gi(d.done ? d.from : a.grade) >= gi(lv); // indice plus grand = grade plus bas
+  return gi(d.done ? d.from : a.grade) >= gi(lv);
 }
-const cerN = () => Math.min(4, Math.max(2, S.cerN || 3)); // nombre de semaines de la cérémonie (3 par défaut)
+const cerN = () => Math.min(4, Math.max(2, S.cerN || 3));
 function vCer() {
   if (cw == null || cw >= S.weeks.length) cw = S.weeks.length - 1;
-  const j = cw, wk = S.weeks[j], D = S.ceremonies[wk] || {}, N = cerN(), win = [...Array(N).keys()].map(k => j - N + 1 + k), nOk = win.filter(i => i >= 0).length || 1; // N semaines : S-1 (la plus ancienne) … S-N (semaine choisie)
+  const j = cw, wk = S.weeks[j], D = S.ceremonies[wk] || {}, N = cerN(), win = [...Array(N).keys()].map(k => j - N + 1 + k), nOk = win.filter(i => i >= 0).length || 1;
   if (!cerAllowAll() && !myLevel()) return `<section class="panel"><h2>Cérémonie</h2><p class="note">Impossible de savoir ton grade : ton rôle ne porte pas le nom d’un grade (ex. « SLO ») et ton compte n’est relié à aucune fiche agent (même ID Discord). Demande à un administrateur de te donner le rôle de ton grade.</p></section>`;
   const rows = sorted().filter(canSeeCer).map(a => {
     const hs = win.map(i => i >= 0 ? a.w[i] : null), d = D[a.id] || {}, on = !!d.a, lock = !can('cerEdit') || (d.done && !can('cerEditDone'));
@@ -208,25 +200,23 @@ function vCer() {
   <div class="frm noprint"><button class="btn gold" data-a="copy">Copier</button>
   ${can('cerValidate') ? '<button class="btn" data-a="apply">Valider : appliquer les changements de grade</button>' : ''}</div></section>`;
 }
-// Récap au format du message Discord de la cérémonie :
-// ## 🛡️ Cérémonie Alta - 05/11/2026 🛡️ / **Sergent II -> Lieutenant :** / - <@ID Discord> (Discord affiche le pseudo de l'agent)
-const DEMO = { alta: ':alta2:', vesp: ':vespucci2:', mr: ':missionrow2:', rox: ':roxwood2:', sandy: ':sandyshores2:' }; // emoji Discord du titre, par district
+const DEMO = { alta: ':alta2:', vesp: ':vespucci2:', mr: ':missionrow2:', rox: ':roxwood2:', sandy: ':sandyshores2:' };
 const DEF_FOOT = '*Félicitation à vous !*\n-# @👮‍♂️〃Secrétaire de Tuco';
 const cerEmo = () => S.cerEmoji ?? DEMO[DD || curD] ?? '';
-const gTxt = g => (S.grecap?.[g] || '').trim() || g; // nom du grade dans le récap (peut contenir un emoji Discord)
+const gTxt = g => (S.grecap?.[g] || '').trim() || g;
 const who = a => `${a.did ? `<@${a.did}> - ` : ''}${a.mat && a.mat !== '-' ? a.mat : '?'} | ${a.nom || ''} ${a.prenom || ''}`.trim();
 function weekFull(w) { const k = weekKey(w); return `${String(k % 100).padStart(2, '0')}/${String(Math.floor(k / 100) % 100).padStart(2, '0')}/${Math.floor(k / 10000)}`; }
 function recap() {
   const D = S.ceremonies[S.weeks[cw]] || {}, gi2 = g => { const i = S.grades.indexOf(g); return i < 0 ? 999 : i; }, groups = new Map();
   actv().filter(a => D[a.id]?.a && canSeeCer(a)).forEach(a => { const d = D[a.id], from = d.from || a.grade, to = d.g || a.grade, k = from + '\u0000' + to; if (!groups.has(k)) groups.set(k, { from, to, L: [] }); groups.get(k).L.push(a); });
-  const G = [...groups.values()].sort((p, q) => gi2(p.to) - gi2(q.to) || gi2(p.from) - gi2(q.from)); // du grade le plus haut au plus bas
+  const G = [...groups.values()].sort((p, q) => gi2(p.to) - gi2(q.to) || gi2(p.from) - gi2(q.from));
   const e = cerEmo().trim(), head = `## ${e ? e + ' ' : ''}Cérémonie ${dName(DD || curD)} - ${weekFull(S.weeks[cw])}${e ? ' ' + e : ''}`;
   const body = G.map(g => `**${gTxt(g.from)} -> ${gTxt(g.to)} :**\n\n` + g.L.sort((p, q) => (p.nom || '').localeCompare(q.nom || '')).map(a => `- ${who(a)}`).join('\n')).join('\n\n');
   const foot = (S.cerFoot ?? DEF_FOOT).trim();
   return head + '\n' + (body || '*Aucune décision.*') + (foot ? '\n\n\n' + foot : '');
 }
 const lockFs = (perm, html) => can(perm) ? html : `<fieldset class="ro" disabled title="Ton rôle ne permet pas de modifier cette section">${html}</fieldset>`;
-const mgr = () => admin || can('usersManage'); // gestion des comptes (non administrateurs)
+const mgr = () => admin || can('usersManage');
 function vSet() {
   return `<section class="panel"><h2>Grades (du plus haut au plus bas)</h2>${can('gradeEdit') ? '' : '<p class="note">Lecture seule.</p>'}` + lockFs('gradeEdit', 
     S.grades.map((g, i) => `<div class="frm srow gr"><button class="btn ghost" data-a="gup" data-i="${i}" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost" data-a="gdn" data-i="${i}" ${i < S.grades.length - 1 ? '' : 'disabled'}>▼</button><input data-a="gname" data-i="${i}" value="${esc(g)}"><input data-a="grec" data-i="${i}" value="${esc(S.grecap?.[g] || '')}" placeholder="Texte dans le récap (ex : ${esc(g)} <:emoji:123>)" title="Nom du grade dans le récap Discord (vide = nom du grade)"><input type="color" class="col" data-a="gcol" data-i="${i}" value="${gradeColor(g)}" title="Couleur du grade"><button class="btn ghost" data-a="gcolr" data-i="${i}" title="Couleur par défaut">↺</button><span class="note">${S.agents.filter(a => a.grade === g).length} agent(s)</span><button class="btn del" data-a="gdel" data-i="${i}">Retirer</button></div>`).join('') +
@@ -241,7 +231,7 @@ function vSet() {
     S.sanctions.map((x, i) => `<div class="frm srow sa">${mvBtns('s', i, S.sanctions.length)}<input data-a="sname" data-i="${i}" value="${esc(x)}"><button class="btn del" data-a="sdel" data-i="${i}">Retirer</button></div>`).join('') +
     `<div class="frm"><input id="sn" placeholder="Nouvelle sanction (ex : Mise à pied 48h)"><button class="btn gold" data-a="sadd">Ajouter</button></div>`) + `</section>`;
 }
-function vAcc() { // Administration › Accès & comptes : demandes d'accès, comptes, rôles et permissions
+function vAcc() {
   return usersPanel() + (admin ? rolesPanel() : '');
 }
 
@@ -253,7 +243,7 @@ const TITLES = { eff: 'Effectifs', hrs: 'Heures de service', imp: 'Importer des 
 const TSUB = { eff: 'Liste des agents du district, grades et matricules', hrs: 'Saisie et suivi des heures de service semaine par semaine', imp: 'Import en masse des heures depuis ta feuille', cer: 'Décisions, sanctions et notes de la cérémonie', set: 'Grades, options de décision, sanctions et rangs masqués', sta: 'Heures, grades, sanctions et historique de chaque agent depuis le début', med: 'Rubans de service à remettre et médailles des agents', acc: 'Demandes d’accès, comptes utilisateurs, rôles et permissions', mda: 'Catalogue des médailles et rubans, synchronisation avec le Google Sheet' };
 const TICON = { eff: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.8 0 4.5 1.9 4.5 4.5"/>', hrs: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', imp: '<path d="M12 3v12m0 0-4-4m4 4 4-4M4 20h16"/>', cer: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', set: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>', sta: '<path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/>', med: '<path d="M8 2h8l-2.5 7h-3z"/><circle cx="12" cy="15" r="6"/><path d="m12 12 .9 1.9 2.1.3-1.5 1.4.4 2.1-1.9-1-1.9 1 .4-2.1-1.5-1.4 2.1-.3z"/>', acc: '<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>', mda: '<path d="M8 2h8l-2.5 7h-3z"/><circle cx="12" cy="15" r="6"/><path d="M12 12v6M9 15h6"/>' };
 function render() {
-  if (!canTab(tab)) tab = TABS.find(canTab) || null; // onglet non autorisé -> 1er onglet accessible
+  if (!canTab(tab)) tab = TABS.find(canTab) || null;
   document.querySelectorAll('#nav button[data-t]').forEach(b => { b.hidden = !canTab(b.dataset.t); b.classList.toggle('on', b.dataset.t === tab); });
   $('#gadm').hidden = ['set', 'acc', 'mda'].every(t => $(`#nav [data-t="${t}"]`).hidden);
   $('#pt').textContent = tab ? TITLES[tab] : 'Accès restreint';
@@ -276,13 +266,11 @@ function setKpi() {
   $('#kpi').innerHTML = !tab ? '' : [[actv().length, 'Agents'], [F(tt), `Heures · sem. du ${S.weeks[kw]}`], [act.length, 'Agents actifs'], [F(act.length ? Math.round(tt / act.length) : 0), 'Moyenne / actif']]
     .map(([b, l], i) => `<div class="kpi k${i}"><span>${l}</span><b>${b}</b></div>`).join('');
 }
-function setTopH() { const t = $('.top'), m = $('.main'); if (t && m) m.style.setProperty('--toph', t.offsetHeight - 22 + 'px'); const h = $('.cer thead tr'); if (h && m) m.style.setProperty('--h1', h.offsetHeight + 'px'); } // hauteur de l'en-tête collant (les en-têtes de tableau se placent dessous)
+function setTopH() { const t = $('.top'), m = $('.main'); if (t && m) m.style.setProperty('--toph', t.offsetHeight - 22 + 'px'); const h = $('.cer thead tr'); if (h && m) m.style.setProperty('--h1', h.offsetHeight + 'px'); }
 addEventListener('resize', setTopH);
 const upd = () => { save(); render(); };
 
-// ---------- actions ----------
 const ICONS = { edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', warn: '<path d="M12 3 2 20h20z"/><path d="M12 10v4m0 3v.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8v.01"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4m8-4v4"/>' };
-// dlg({title, msg, input, ok, cancel, danger, icon}) -> confirmation : true/null · saisie : texte/null · cancel:null = simple message
 function dlg({ title = '', msg = '', input = null, password = false, ok = 'OK', cancel = 'Annuler', danger = false, icon } = {}) {
   return new Promise(res => {
     const m = $('#dm'), f = $('#df'), inp = $('#di');
@@ -293,7 +281,7 @@ function dlg({ title = '', msg = '', input = null, password = false, ok = 'OK', 
     $('#dc').hidden = cancel === null; $('#dc').textContent = cancel ?? '';
     f.classList.toggle('dng', danger); m.hidden = false;
     if (input != null) { inp.focus(); inp.select(); } else $('#dok').focus();
-    const esc = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); } }; // consommée : en jeu, Échap ne ferme pas l'ordinateur
+    const esc = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); } };
     const done = v => { m.hidden = true; f.onsubmit = $('#dc').onclick = m.onmousedown = null; document.removeEventListener('keydown', esc, true); res(v); };
     document.addEventListener('keydown', esc, true);
     f.onsubmit = e => { e.preventDefault(); done(input != null ? inp.value : true); };
@@ -311,8 +299,6 @@ async function addWeek() {
   if (S.weeks.includes(v.trim())) { await dlg({ title: 'Semaine existante', msg: `La semaine du ${v.trim()} existe déjà.`, cancel: null, icon: 'warn' }); return; }
   S.weeks.push(v.trim()); S.agents.forEach(a => a.w.push(null)); sortWeeks(S); cw = hw = S.weeks.indexOf(v.trim()); upd();
 }
-// Lecture d'une ligne collée : colonnes (tabulations ou « ; ») « Nom ⇥ Rang ⇥ Part employé ⇥ Heures » (copie d'un tableau),
-// ou texte libre « Prénom Nom 43h30min ». Renvoie { name, grade, mins } ou null (en-tête, ligne TOTAL, ligne sans durée).
 const isDur = c => /^\d+h(\d{1,2})?(min)?$/i.test(c) || /^\d+:\d{2}$/.test(c);
 function parseLine(line) {
   const cols = line.split(/\t|;/).map(c => c.trim());
@@ -329,8 +315,8 @@ function parseLine(line) {
 function doImport() {
   const wi = +$('#iw').value, upG = false; let ok = 0, cr = 0, gch = 0; const unk = [], badG = new Set();
   const findG = g => g ? S.grades.find(x => norm(x) === norm(g)) : null;
-  const newG = [], archHit = [], ignored = [], low = [...S.grades].reverse().find(g => !ignR(g)) || S.grades.at(-1); // grade par défaut des agents créés sans rang connu
-  if (false) { // créer les rangs inconnus, placés selon l'ordre du tableau collé (trié du plus haut au plus bas)
+  const newG = [], archHit = [], ignored = [], low = [...S.grades].reverse().find(g => !ignR(g)) || S.grades.at(-1);
+  if (false) {
     const seq = []; for (const line of $('#it').value.split('\n')) { const L = line.trim() && parseLine(line); if (L && L.grade && !seq.some(x => norm(x) === norm(L.grade))) seq.push(L.grade); }
     seq.forEach((g, i) => {
       if (findG(g) || ignR(g)) return;
@@ -342,9 +328,9 @@ function doImport() {
   for (const line of $('#it').value.split('\n')) {
     if (!line.trim()) continue;
     const L = parseLine(line); if (!L || L.mins == null) continue;
-    const nl = norm(L.name); let b = S.agents.find(a => norm(full(a)) === nl) || null; // nom exact d'abord
+    const nl = norm(L.name); let b = S.agents.find(a => norm(full(a)) === nl) || null;
     if (!b) for (const a of S.agents) { const n = norm(full(a)); if (n && nl.includes(n) && (!b || n.length > norm(full(b)).length)) b = a; }
-    if (ignR(L.grade) && !(b && b.man)) { ignored.push(L.name); continue; } // Patron, Sheriff… : jamais importés (sauf agent ajouté à la main)
+    if (ignR(L.grade) && !(b && b.man)) { ignored.push(L.name); continue; }
     const g = findG(L.grade); if (L.grade && !g) badG.add(L.grade);
     if (b) {
       b.w[wi] = L.mins; ok++; if (b.arch) archHit.push(full(b));
@@ -361,12 +347,12 @@ function doImport() {
     (unk.length ? `<br>Non reconnus (absents du site, heures non importées) : ${unk.map(esc).join(', ')}` : '') +
     (badG.size ? `<br>Rangs absents de la liste des grades (ignorés) : ${[...badG].map(esc).join(', ')} — ajoute-les dans Administration › Personnalisation si besoin.` : '');
 }
-function unlock(a) { // admin : annule l'application d'une décision déjà validée
+function unlock(a) {
   const d = (S.ceremonies[S.weeks[cw]] || {})[a.id];
   if (d?.done) { a.grade = d.from; d.done = false; }
 }
-function logGrade(a, from, to, src) { (S.glog ||= []).push({ id: uid() + uid(), agent: a.id, t: Date.now(), w: S.weeks.length - 1, from, to, src }); } // création / modification manuelle (les cérémonies ont leur propre historique)
-function ent(id) { return ((S.ceremonies[S.weeks[cw]] ||= {})[id] ||= {}); } // fiche cérémonie d'un agent (décision, infos, notes)
+function logGrade(a, from, to, src) { (S.glog ||= []).push({ id: uid() + uid(), agent: a.id, t: Date.now(), w: S.weeks.length - 1, from, to, src }); }
+function ent(id) { return ((S.ceremonies[S.weeks[cw]] ||= {})[id] ||= {}); }
 function decide(id, patch) {
   const wk = S.weeks[cw], a = S.agents.find(x => x.id === id);
   const D = (S.ceremonies[wk] ||= {}), d = (D[id] ||= {});
@@ -426,7 +412,7 @@ document.addEventListener('click', async e => {
     if (p === null) return;
     if (await adminCall('POST', `/api/users/${id}/password`, { password: p })) await dlg({ title: 'Mot de passe modifié', msg: `Le mot de passe de « ${u.name} » a été mis à jour.`, cancel: null, icon: 'info' });
   }
-  else if (act === 'rgrades') { // un rôle par grade, de SLO à Capitaine (liste de grades du district affiché)
+  else if (act === 'rgrades') {
     const nk = x => norm(x).replace(/[^a-z0-9]/g, ''), G = S.grades.filter(g => !ignR(g));
     const lo = G.findIndex(g => nk(g) === 'slo'), hiI = G.findIndex(g => nk(g) === 'capitaine'), hi = hiI < 0 ? 0 : hiI;
     if (lo < 0) { await dlg({ title: 'Grade SLO introuvable', msg: 'La liste de grades de ce district ne contient pas « SLO ».', cancel: null, icon: 'warn' }); return; }
@@ -448,7 +434,7 @@ document.addEventListener('click', async e => {
     if (n) await dlg({ title: 'Rôle utilisé', msg: `${n} compte(s) ont encore ce rôle : change leur rôle avant de le retirer.`, cancel: null, icon: 'warn' });
     else if (await dlg({ title: 'Retirer le rôle', msg: `Retirer le rôle « ${r.name} » ?`, ok: 'Retirer', danger: true }) && await adminCall('PUT', '/api/roles', { roles: clone(roles).filter(x => x.id !== id) })) render();
   }
-  else if (act === 'rup' || act === 'rdn') { // ordre des rôles (enregistré sur le serveur)
+  else if (act === 'rup' || act === 'rdn') {
     const next = clone(roles), i = next.findIndex(x => x.id === id), k = act === 'rup' ? i - 1 : i + 1; if (i < 0 || k < 0 || k >= next.length) return;
     [next[i], next[k]] = [next[k], next[i]]; if (await adminCall('PUT', '/api/roles', { roles: next })) render();
   }
@@ -460,7 +446,7 @@ document.addEventListener('click', async e => {
   else if (act === 'dsel') switchD(el.dataset.d);
   else if (act === 'unman') { if (!can('agentEdit')) return; const a = S.agents.find(x => x.id === id); if (a) { delete a.man; upd(); } }
   else if (act === 'gded') { if (!admin) return; st.ged = !st.ged; render(); }
-  else if (act === 'udis') { // donner / retirer l'accès à un district
+  else if (act === 'udis') {
     if (!mgr()) return; const u = users.find(x => x.id === id); if (!u) return; const d = el.dataset.d, has = (u.districts || []).includes(d);
     if (await adminCall('PATCH', `/api/users/${id}`, { districts: has ? u.districts.filter(x => x !== d) : [...(u.districts || []), d] })) render();
   }
@@ -511,7 +497,7 @@ document.addEventListener('change', e => {
   else if (el.id === 'pf') { st.f = +el.value; if (st.t != null && st.t < st.f) st.t = st.f; render(); }
   else if (el.id === 'pe') { st.t = +el.value; if (st.f > st.t) st.f = st.t; render(); }
   else if (el.id === 'ew') { flt.w = +el.value; $('#list').innerHTML = listHtml(); }
-  else if (act === 'udid') { // admin : associer / modifier l'ID Discord d'un compte
+  else if (act === 'udid') {
     adminCall('PATCH', `/api/users/${el.dataset.id}`, { discordId: el.value.trim() }).then(() => softRender());
   }
   else if (act === 'urole') {
@@ -529,7 +515,7 @@ document.addEventListener('change', e => {
   else if (act === 'egr') { if (!can('agentEdit')) return; const a = S.agents.find(x => x.id === el.dataset.id), old = a.grade; a.grade = el.value; if (old !== a.grade) logGrade(a, old, a.grade, 'modification manuelle'); save(); }
   else if (act === 'grec') { if (!can('gradeEdit')) return; (S.grecap ||= {})[S.grades[+el.dataset.i]] = el.value.trim(); save(); }
   else if (act === 'gcol') { S.gcol[S.grades[+el.dataset.i]] = el.value; upd(); }
-  else if (act === 'emat' || act === 'epre' || act === 'enom') { // modifier matricule / prénom / nom
+  else if (act === 'emat' || act === 'epre' || act === 'enom') {
     if (!can('agentEdit')) return;
     const a = S.agents.find(x => x.id === el.dataset.id), k = { emat: 'mat', epre: 'prenom', enom: 'nom' }[act], v = el.value.trim();
     if (act === 'emat' ? !v : (!v && !a[act === 'epre' ? 'nom' : 'prenom'])) { el.value = a[k]; return; }
@@ -564,7 +550,7 @@ document.addEventListener('change', e => {
     const ac = S.actions.find(x => x.id === el.value), i = S.grades.indexOf(a.grade);
     const g = !ac ? a.grade : ac.to !== undefined ? ac.to : i < 0 ? a.grade : S.grades[Math.max(0, Math.min(S.grades.length - 1, i + ac.mv))];
     decide(a.id, { a: el.value, from: a.grade, g }); upd();
-  } else if (act === 'ng') { // nouveau grade choisi directement : on en déduit la décision si besoin
+  } else if (act === 'ng') {
     const a = S.agents.find(x => x.id === el.dataset.id), d = ent(a.id);
     if (!d.a) {
       const i = S.grades.indexOf(a.grade), k = S.grades.indexOf(el.value);
@@ -582,11 +568,9 @@ document.addEventListener('input', e => {
   else if (e.target.id === 'sas') { st.q = e.target.value; $('#alist').innerHTML = aListHtml(); }
 });
 $('#nav').addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (b && canTab(b.dataset.t)) { tab = b.dataset.t; render(); } });
-document.addEventListener('click', e => { const h = e.target.closest('.sh'); if (h) h.parentElement.classList.toggle('closed'); }); // sections repliables
-$('#sq').addEventListener('input', e => { const q = norm(e.target.value); document.querySelectorAll('#nav button[data-t]').forEach(b => b.classList.toggle('nf', !!q && !norm(b.textContent).includes(q))); }); // recherche de page
+document.addEventListener('click', e => { const h = e.target.closest('.sh'); if (h) h.parentElement.classList.toggle('closed'); });
+$('#sq').addEventListener('input', e => { const q = norm(e.target.value); document.querySelectorAll('#nav button[data-t]').forEach(b => b.classList.toggle('nf', !!q && !norm(b.textContent).includes(q))); });
 
-// sauvegarde / restauration / reset
-// grande zone de texte (sauvegarde à copier / à coller) : fenêtre ajoutée sur document.body, comme les autres fenêtres
 function textBox({ title, msg, text = '', readonly = false, ok = 'OK', extra = null }) {
   return new Promise(res => {
     const m = document.createElement('div'); m.className = 'modal tbx';
@@ -602,13 +586,13 @@ function textBox({ title, msg, text = '', readonly = false, ok = 'OK', extra = n
     document.body.appendChild(m); (readonly ? ta.select() : ta.focus());
   });
 }
-$('#bk').onclick = async () => { // sauvegarde : texte à copier (+ fichier hors jeu)
+$('#bk').onclick = async () => {
   const txt = JSON.stringify(S, null, 2);
   const r = await textBox({ title: 'Sauvegarde · ' + dName(DD || curD), msg: 'Copie ce texte et garde-le (bloc-notes, Discord…). Pour restaurer : menu Restaurer, puis colle-le.', text: txt, readonly: true, ok: 'Copier',
     extra: { label: 'Télécharger le fichier', run: () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'application/json' })); a.download = `samp-${DD || 'district'}-sauvegarde.json`; document.body.appendChild(a); a.click(); a.remove(); } } });
   if (r != null) { try { await navigator.clipboard.writeText(txt); } catch (e) { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (x) {} ta.remove(); } }
 };
-$('#rsb').onclick = async () => { // restauration : coller la sauvegarde (+ fichier hors jeu)
+$('#rsb').onclick = async () => {
   if (!can('dataReset')) return;
   const txt = await textBox({ title: 'Restaurer · ' + dName(DD || curD), msg: 'Colle ici le texte de la sauvegarde. Les données actuelles de ce district seront remplacées.', ok: 'Restaurer',
     extra: { label: 'Choisir un fichier…', run: () => $('#rs').click() } });
@@ -621,7 +605,6 @@ $('#rs').onchange = async e => {
   try { const d = JSON.parse(await e.target.files[0].text()); if (d.weeks && d.agents) { S = migrate(d); upd(); } } catch (err) { await dlg({ title: 'Restauration impossible', msg: 'Ce fichier de sauvegarde est invalide.', cancel: null, icon: 'warn' }); }
 };
 $('#rz').onclick = async () => { if (can('dataReset') && await dlg({ title: 'Réinitialiser', msg: 'Tout réinitialiser avec les données de départ ? Les modifications actuelles seront perdues.', ok: 'Réinitialiser', danger: true })) { S = migrate(seed()); upd(); } };
-// ---------- connexion & synchronisation avec le serveur (server.js) ----------
 const TABS = ['eff', 'hrs', 'imp', 'cer', 'sta', 'med', 'set', 'acc', 'mda'];
 const PERM_GROUPS = [
   ['Agents', [['agentAdd', 'Créer'], ['agentEdit', 'Modifier'], ['agentDel', 'Archiver / suppr.']]],
@@ -631,7 +614,7 @@ const PERM_GROUPS = [
   ['Médailles', [['medalEdit', 'Gérer / remettre'], ['sheetSync', 'Synchro Google Sheet']]],
   ['Données', [['dataBackup', 'Sauvegarde'], ['dataReset', 'Restaurer / réinit.']]]];
 const PERMS = PERM_GROUPS.flatMap(g => g[1]);
-const PERM_DESC = { // petit descriptif affiché sous chaque permission (Accès & comptes › Permissions)
+const PERM_DESC = {
   agentAdd: 'Ajouter un agent dans Effectifs.', agentEdit: 'Changer le matricule, le nom ou le grade d’un agent.', agentDel: 'Archiver un agent, le réintégrer ou le supprimer définitivement.',
   hoursEdit: 'Saisir ou corriger les heures dans l’onglet Heures.', hoursImport: 'Coller le tableau d’heures dans l’onglet Importer.', weekAdd: 'Créer une nouvelle semaine.',
   cerEdit: 'Choisir les décisions, sanctions, formations et notes de la cérémonie.', cerValidate: 'Appliquer les changements de grade de la cérémonie.', cerEditDone: 'Modifier une décision déjà appliquée.',
@@ -643,8 +626,8 @@ const PERM_DESC = { // petit descriptif affiché sous chaque permission (Accès 
 let pwdOn = true, roles = [], users = [], firstRun = false, discordOn = false, redirUrl = '', dcMsg = '';
 let SV = 0, VV = 0, S0 = null, saving = false, dirty = false, saveTimer = null, needRender = false;
 const roleOf = u => roles.find(r => r.id === u.role) || roles.find(r => r.id === 'pending') || { name: '?', tabs: [], perms: [] };
-const canTab = t => !!me && !!t && (t === 'acc' || myD.length > 0) && (t === 'acc' ? admin || can('usersManage') : t === 'mda' ? can('medalEdit') || can('sheetSync') : admin || (roleOf(me).tabs || []).includes(t)); // acc / mda : selon les permissions
-const can = p => !!me && (admin || (roleOf(me).perms || []).includes(p)); // permissions fines (voir « Rôles et accès »)
+const canTab = t => !!me && !!t && (t === 'acc' || myD.length > 0) && (t === 'acc' ? admin || can('usersManage') : t === 'mda' ? can('medalEdit') || can('sheetSync') : admin || (roleOf(me).tabs || []).includes(t));
+const can = p => !!me && (admin || (roleOf(me).perms || []).includes(p));
 const clone = x => JSON.parse(JSON.stringify(x));
 const setSync = (s, tip) => { const l = $('#syled'); if (l) { l.dataset.s = s; l.title = tip; } };
 const apiUrl = (method, url) => { const [p, q] = url.replace(/^\/api\//, '').split('?'); return `api.php?r=${p}${method === 'GET' || method === 'POST' ? '' : '&_m=' + method}${q ? '&' + q : ''}`; };
@@ -654,7 +637,6 @@ async function api(method, url, body) {
   return { ok: r.ok, status: r.status, json: j };
 }
 
-// fusion à 3 voies (base = dernier état connu du serveur, mine = mes changements, theirs = état actuel du serveur) : évite d'écraser le travail des autres
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const idList = x => x.every(i => i && typeof i === 'object' && typeof i.id === 'string') && new Set(x.map(i => i.id)).size === x.length;
 function merge(b, m, t) {
@@ -680,7 +662,7 @@ const editing = () => { const a = document.activeElement; return !!(csPop || !$(
 const softRender = () => editing() ? (needRender = true) : render();
 
 function save() { if (!me) return; dirty = true; setSync('busy', 'Enregistrement…'); clearTimeout(saveTimer); saveTimer = setTimeout(flush, 400); }
-let fails = 0; const retryMs = () => Math.min(60000, 4000 * 2 ** Math.min(4, fails++)); // nouvelles tentatives de plus en plus espacées (4 s → 60 s)
+let fails = 0; const retryMs = () => Math.min(60000, 4000 * 2 ** Math.min(4, fails++));
 async function flush() {
   if (!me) return;
   if (saving) { saveTimer = setTimeout(flush, 250); return; }
@@ -701,14 +683,14 @@ function applyPayload(j) {
   if (j.me) { me = j.me; admin = !!roleOf(me).admin; }
   if (j.districts) myD = j.districts;
   if ('d' in j) curD = j.d;
-  const sw = j.d !== DD; // changement de district : on remplace les données affichées
+  const sw = j.d !== DD;
   if (!j.d) { DD = null; S = migrate(seed()); S0 = null; }
-  else if (j.state === null && (sw || !dirty)) { DD = j.d; S = migrate(seed()); S0 = clone(S); SV = j.sv; save(); } // district vide : on crée la 1re version
+  else if (j.state === null && (sw || !dirty)) { DD = j.d; S = migrate(seed()); S0 = clone(S); SV = j.sv; save(); }
   else if (j.state && (sw || (j.sv !== SV && !dirty && !saving))) { DD = j.d; S = migrate(j.state); S0 = clone(S); SV = j.sv; }
   if (curD) try { localStorage.setItem(KEY + '-d', curD); } catch (e) {}
   applyDistrict();
 }
-function applyDistrict() { // logo, couleurs, nom et sélecteur du district affiché
+function applyDistrict() {
   const d = curD || 'sandy'; document.documentElement.dataset.d = d;
   document.querySelectorAll('img.logo, img.llogo').forEach(i => { if (!i.src.endsWith(dLogo(d))) i.src = dLogo(d); });
   const ic = document.querySelector('link[rel="icon"]'); if (ic) ic.href = dLogo(d);
@@ -716,13 +698,13 @@ function applyDistrict() { // logo, couleurs, nom et sélecteur du district affi
   document.title = `SAMP · ${dName(d)} · Suivi & Cérémonies`;
   const w = $('#dsw'); if (w) w.innerHTML = !me || !myD.length ? '' : myD.map(x => `<button type="button" class="dchip${x === curD ? ' on' : ''}" data-a="dsel" data-d="${x}" title="District ${dName(x)}"${myD.length < 2 ? ' disabled' : ''}><img src="${dLogo(x)}" alt=""><span>${dName(x)}</span></button>`).join('');
 }
-async function switchD(d) { // changer de district (les modifications en cours sont d'abord enregistrées)
+async function switchD(d) {
   if (!myD.includes(d) || d === curD) return;
   clearTimeout(saveTimer); if (dirty || saving) { for (let k = 0; k < 40 && (dirty || saving); k++) { if (!saving) await flush(); else await new Promise(r => setTimeout(r, 100)); } }
   curD = d; syncP = null; st.id = null; mq = ''; hq = ''; hg = ''; cw = hw = null;
   try { const r = await api('GET', '/api/boot?d=' + d); if (r.ok && r.json) { applyPayload(r.json); tab = canTab(tab) ? tab : TABS.find(canTab) || null; render(); } } catch (e) { setSync('off', 'Serveur injoignable'); }
 }
-async function sync() { // toutes les 4 s : récupère les changements des autres ordinateurs
+async function sync() {
   if (!me || document.hidden || saving || dirty) return;
   try {
     const r = await api('GET', '/api/sync?v=' + VV + (curD ? '&d=' + curD : ''));
@@ -741,13 +723,13 @@ async function load() {
   if (!j.me) { me = null; admin = false; users = []; roles = []; render(); showLogin(); if (dcMsg) $('#le').textContent = dcMsg; return; }
   applyPayload(j); setSync('ok', 'Synchronisé avec le serveur'); $('#login').hidden = true; { const t = tabFromPath(); tab = t && canTab(t) ? t : TABS.find(canTab) || null; } render();
 }
-const IN_GAME = Array.from(location.ancestorOrigins || []).some(o => /cfx-nui-external-iframe|\.fbfa\.fr$|\/\/fbfa\.fr$/.test(o)); // affiché dans l'ordinateur du jeu
+const IN_GAME = Array.from(location.ancestorOrigins || []).some(o => /cfx-nui-external-iframe|\.fbfa\.fr$|\/\/fbfa\.fr$/.test(o));
 function showLogin() {
   $('#lt').textContent = firstRun ? 'Création du compte administrateur' : 'Connexion';
   $('#ls').textContent = firstRun ? 'Aucun compte n’existe encore : le premier compte sera administrateur (identifiant ou Discord).' : 'Accès réservé aux membres enregistrés.';
   $('#lc').hidden = !firstRun || !pwdOn; $('#lb').textContent = firstRun ? 'Créer le compte' : 'Se connecter';
-  document.querySelectorAll('#lf .fld:not(#lc), #lf .lrem, #lb, #lf .lsep').forEach(e => e.hidden = !pwdOn); // Discord uniquement
-  $('#ld').hidden = IN_GAME; $('#lig').hidden = !IN_GAME; // en jeu : connexion IG (automatique depuis l'ordinateur), pas de redirection Discord
+  document.querySelectorAll('#lf .fld:not(#lc), #lf .lrem, #lb, #lf .lsep').forEach(e => e.hidden = !pwdOn);
+  $('#ld').hidden = IN_GAME; $('#lig').hidden = !IN_GAME;
   if (!pwdOn) $('#ls').textContent = firstRun ? 'Aucun compte n’existe encore : le premier compte connecté avec Discord sera administrateur.' : 'Connecte-toi avec ton compte Discord.';
   $('#lu').value = $('#lp').value = $('#lp2').value = ''; $('#le').textContent = ''; $('#login').hidden = false; if (pwdOn) $('#lu').focus();
 }
@@ -782,7 +764,7 @@ $('#ld').onclick = async () => {
   if (!discordOn) { await dlg({ title: 'Discord non configuré', msg: `Renseigne discordClientId et discordClientSecret dans config.php (hébergement PHP) ou config.json (node server.js) — voir LISEZ-MOI.\n\nURL de redirection à enregistrer dans le portail Discord :\n${redirUrl || new URL('discord.php', location.href).href}`, cancel: null, icon: 'warn' }); return; }
   location.href = 'discord.php';
 };
-async function adminCall(method, url, body) { // action d'administration : le serveur renvoie la liste à jour des comptes et des rôles
+async function adminCall(method, url, body) {
   let r; try { r = await api(method, url, body); } catch (e) { await dlg({ title: 'Serveur injoignable', msg: 'Impossible de joindre le serveur.', cancel: null, icon: 'warn' }); return false; }
   if (!r.ok) { await dlg({ title: 'Action impossible', msg: r.json?.error || 'Erreur serveur.', cancel: null, icon: 'warn' }); return false; }
   if (r.json.users) users = r.json.users; if (r.json.roles) roles = r.json.roles;
@@ -809,7 +791,7 @@ function usersPanel() {
   const ro = sel => okRoles.map(r => `<option value="${r.id}" ${r.id === sel ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
   const dTog = u => isA(u) ? '<span class="dtg"><span class="tag">tous les districts</span></span>' : `<span class="dtg">${DIDS.map(d => `<button type="button" class="dchip sm${(u.districts || []).includes(d) ? ' on' : ''}" data-a="udis" data-id="${u.id}" data-d="${d}" title="${(u.districts || []).includes(d) ? 'Retirer' : 'Donner'} l’accès à ${dName(d)}" ${myD.includes(d) ? '' : 'disabled'}><img src="${dLogo(d)}" alt=""><span>${dName(d)}</span></button>`).join('')}</span>`;
   const row = u => {
-    const lockU = !admin && isA(u); // un gestionnaire ne touche pas aux administrateurs
+    const lockU = !admin && isA(u);
     return `<div class="frm${u.role === 'pending' ? ' pend' : ''}">${avHtml(u)}<b class="uname">${esc(u.name)}${u.id === me?.id ? ' <span class="note">(toi)</span>' : ''}${u.role === 'pending' ? ' <span class="tag">En attente</span>' : ''}</b>` +
       dTog(u) + `<input class="ein" style="width:170px" data-a="udid" data-id="${u.id}" placeholder="ID Discord" value="${esc(u.discordId || '')}" ${lockU ? 'disabled' : ''}>` +
       `<span class="dpn${u.dname ? ' on' : ''}" title="Pseudo Discord (rempli automatiquement à la connexion avec Discord)"><svg viewBox="0 0 24 24"><path d="M7.2 6.2c1.6-.7 3.3-1 4.8-1s3.2.3 4.8 1l1.7 1.9c1.4 2.6 2 5.4 1.8 8.4-1.4 1.1-3.1 1.8-4.4 2.1l-1.1-1.7c.9-.2 1.7-.6 2.4-1.1-.2-.1-.5-.3-.7-.5-2.3 1-5.1 1-7.4 0-.2.2-.5.4-.7.5.7.5 1.5.9 2.4 1.1l-1.1 1.7c-1.3-.3-3-1-4.4-2.1-.2-3 .4-5.8 1.8-8.4z"/></svg>${u.dname ? esc(dpseudo(u)) : '<i>non connecté avec Discord</i>'}</span>` +
@@ -823,10 +805,9 @@ function usersPanel() {
     `<div class="frm"><input id="nu" placeholder="Identifiant" autocomplete="off"><input id="nd" placeholder="ID Discord${pwdOn ? ' (optionnel)' : ''}" autocomplete="off">${pwdOn ? '<input id="np" type="password" placeholder="Mot de passe (facultatif avec Discord)" autocomplete="new-password">' : ''}<select id="nr">${ro((okRoles.find(r => !r.admin && r.id !== 'pending') || okRoles.find(r => r.id === 'pending') || {}).id)}</select><select id="ndis" title="District du compte">${myD.map(d => `<option value="${d}" ${d === curD ? 'selected' : ''}>${dName(d)}</option>`).join('')}</select><button class="btn gold" data-a="uadd">Créer le compte</button></div></section>`;
 }
 
-// ---------- médailles, rubans de service & synchronisation Google Sheet ----------
 const pad2 = n => String(n).padStart(2, '0');
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
-function frDate(s) { // "21/05/2023", "1/5/23", "2023-05-21" -> "2023-05-21"
+function frDate(s) {
   s = String(s || '').trim(); let m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/);
   if (m) { const y = m[3].length === 2 ? 2000 + +m[3] : +m[3], mo = +m[2], d = +m[1]; return mo >= 1 && mo <= 12 && d >= 1 && d <= 31 ? `${y}-${pad2(mo)}-${pad2(d)}` : null; }
   m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
@@ -841,7 +822,7 @@ function addDur(iso, md) { const u = md.u || 'm', n = +md.n || 0; if (u === 'm' 
 const daysUntil = iso => Math.ceil((new Date(iso + 'T00:00:00') - new Date(todayIso() + 'T00:00:00')) / 864e5);
 const anc = iso => { const k = monthsSince(iso); return k == null ? '—' : k < 12 ? `${k} mois` : `${Math.floor(k / 12)} an${k >= 24 ? 's' : ''}${k % 12 ? ` ${k % 12} mois` : ''}`; };
 const uOpts = sel => Object.entries(UNITS).map(([k, v]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${v[1]}</option>`).join('');
-function medState(a, md) { // { earned: date d'obtention ou null, due: date prévue (rubans), given: remis le (timestamp) }
+function medState(a, md) {
   const aw = S.awards?.[a.id]?.[md.id];
   if (md.n) { const due = a.arr ? addDur(a.arr, md) : null; return { earned: due && due <= todayIso() ? due : null, due, given: aw?.given || null }; }
   return { earned: aw?.at || null, due: null, given: aw ? aw.given || aw.t || 1 : null };
@@ -849,13 +830,12 @@ function medState(a, md) { // { earned: date d'obtention ou null, due: date pré
 const medIcon = (md, cls = '') => md.img ? `<img class="mic ${cls}" src="${md.img}" alt="${esc(md.name)}" title="${esc(md.name)}">`
   : `<span class="mic rib ${cls}" style="--c:${esc(md.color || '#b8a47c')}" title="${esc(md.name)}">${md.n ? `<i>${durShort(md)}</i>` : ''}</span>`;
 function agentMedals(a) { return S.medals.map(md => ({ md, s: medState(a, md) })).filter(o => o.s.earned); }
-const medRow = (a, click) => agentMedals(a).map(({ md, s }) => { // click : chaque ruban devient un bouton (remis <-> à remettre, ou retirer une médaille manuelle)
+const medRow = (a, click) => agentMedals(a).map(({ md, s }) => {
   const tip = !md.n ? `${md.name} — attribuée le ${fmtD(s.earned)}${click ? ' · clic : retirer' : ''}` : s.given ? `${md.name} — remis${click ? ' · clic : annuler la remise' : ''}` : `${md.name} — obtenu le ${fmtD(s.earned)}, pas encore remis${click ? ' · clic : marquer remis' : ''}`;
   const ic = s.given ? medIcon(md) : `<span class="mpend">${medIcon(md)}</span>`;
   return click ? `<button type="button" class="mtg" data-a="mtog" data-id="${a.id}" data-m="${md.id}" title="${esc(tip)}">${ic}</button>` : `<span title="${esc(tip)}">${ic}</span>`;
 }).join('') || '<span class="note">—</span>';
 
-// --- Google Sheet : lecture CSV, analyse, aperçu des changements ---
 function csvParse(t) {
   const rows = []; let row = [], f = '', q = false;
   for (let i = 0; i < t.length; i++) {
@@ -885,7 +865,7 @@ function sheetRecords(rows) {
   }
   return { recs, hasDistrict: C.dis >= 0, dcols: dcols.map(o => o.name) };
 }
-let syncP = null; // aperçu en cours { items, unknown, stats }
+let syncP = null;
 function buildPreview(parsed) {
   const want = norm(S.sheet.district || ''), recs = parsed.recs.filter(r => !want || !parsed.hasDistrict || norm(r.dis) === want);
   const ign = recs.filter(r => ignR(r.grade) || ignR(mapG(r.grade))), keep = recs.filter(r => !ign.includes(r));
@@ -902,18 +882,16 @@ function buildPreview(parsed) {
     if (g && g !== a.grade && !hiddenA(a)) items.push({ k: 'grade', a, r, from: a.grade, to: g, on: true });
     if (r.mat && r.mat !== a.mat) items.push({ k: 'mat', a, r, from: a.mat, to: r.mat, on: true });
     if (arr && arr !== a.arr) items.push({ k: 'arr', a, r, from: a.arr, to: arr, on: true });
-    items.push({ k: 'quiet', a, r, on: true }); // ID Discord + dates de grade (sans affichage)
+    items.push({ k: 'quiet', a, r, on: true });
   }
-  const other = parsed.hasDistrict ? parsed.recs.filter(r => { const d = dFromName(r.dis); return d && d !== DD; }) : []; // agents d'autres districts dans le Sheet
-  actv().filter(a => !used.has(a.id) && !ignR(a.grade)).forEach(a => { // absent du district : mutation (s'il est dans un autre district du Sheet) ou archivage
+  const other = parsed.hasDistrict ? parsed.recs.filter(r => { const d = dFromName(r.dis); return d && d !== DD; }) : [];
+  actv().filter(a => !used.has(a.id) && !ignR(a.grade)).forEach(a => {
     const o = other.find(r => (r.did && a.did === r.did) || norm(r.pre + ' ' + r.nom) === norm(full(a)) || (r.mat && a.mat && a.mat !== '-' && r.mat === a.mat)), to = o && dFromName(o.dis);
     items.push(to && myD.includes(to) ? { k: 'mut', a, r: o, to, on: true } : { k: 'arch', a, on: true });
-  }); // Patron, Sheriff… : jamais archivés automatiquement
+  });
   syncP = { items, unknown: [...unknown], nIgn: ign.length, nRec: keep.length, dcols: parsed.dcols };
 }
-// district d'après le texte du Sheet (« Sandy Shore », « Sandy Shores », « Mission Row »…)
 const dFromName = v => { const x = norm(v || '').replace(/[^a-z]/g, ''); return x ? DIDS.find(d => { const n = norm(DIST[d]).replace(/[^a-z]/g, ''); return x === n || x === n + 's' || x + 's' === n; }) || null : null; };
-// Mutation : l'agent, ses heures (par semaine), son historique, ses médailles et ses cérémonies passent dans l'autre district
 async function transferAgent(a, toD) {
   if (!myD.includes(toD) || !DD || toD === DD) return false;
   for (let tries = 0; tries < 3; tries++) {
@@ -931,7 +909,7 @@ async function transferAgent(a, toD) {
     sortWeeks(T);
     T.glog.push({ id: uid() + uid(), agent: b.id, t: Date.now(), w: T.weeks.length - 1, from: a.grade, to: a.grade, src: `Mutation ${dName(DD)} → ${dName(toD)}` });
     const p = await api('PUT', '/api/state', { base: r.json.sv, state: T, d: toD });
-    if (p.ok) { // l'agent quitte ce district
+    if (p.ok) {
       S.agents = S.agents.filter(x => x !== a); if (S.awards) delete S.awards[a.id];
       Object.values(S.ceremonies || {}).forEach(c => delete c[a.id]); S.glog = (S.glog || []).filter(g => g.agent !== a.id); upd(); return true;
     }
@@ -940,7 +918,7 @@ async function transferAgent(a, toD) {
   return false;
 }
 async function doSync() {
-  { const u = ($('#murl')?.value || '').trim(); if (u && u !== S.sheet.url) { S.sheet.url = u; const g = (u.match(/[#&?]gid=(\d+)/) || [])[1]; if (g) S.sheet.gid = g; save(); } } // lien du champ, même s'il n'est pas encore enregistré
+  { const u = ($('#murl')?.value || '').trim(); if (u && u !== S.sheet.url) { S.sheet.url = u; const g = (u.match(/[#&?]gid=(\d+)/) || [])[1]; if (g) S.sheet.gid = g; save(); } }
   if (!S.sheet.url) { await dlg({ title: 'Lien manquant', msg: 'Colle d’abord le lien de ton Google Sheet.', cancel: null, icon: 'warn' }); return; }
   $('#msync').disabled = true; $('#msync').textContent = 'Lecture du Sheet…';
   try {
@@ -979,7 +957,7 @@ function previewHtml() {
     (groups.length ? groups.map(([k, L]) => `<div class="spg ${SYNC_L[k][1]}"><h3 class="sub">${SYNC_L[k][0]} <span class="note">(${L.length})</span></h3>${L.map(line).join('')}</div>`).join('') : '<p class="note">Tout est déjà à jour.</p>') +
     `<div class="frm"><button class="btn gold" data-a="mapply">Appliquer les changements cochés</button><button class="btn ghost" data-a="mcancel">Annuler</button></div></div>`;
 }
-let mq = '', mgq = '', mgAll = false; // recherche agents / filtre et affichage de l'historique des remises
+let mq = '', mgq = '', mgAll = false;
 function vMed(part) {
   const ed = can('medalEdit'), list = byGrade(actv()).filter(a => !mq || norm(full(a) + ' ' + a.mat + ' ' + a.grade).includes(norm(mq)));
   const due = []; actv().forEach(a => S.medals.forEach(md => { const s = medState(a, md); if (md.n && s.earned && !s.given) due.push({ a, md, s }); }));
@@ -1001,7 +979,6 @@ function vMed(part) {
       return `<tr><td>${esc(full(a))} ${badge(a.grade)}</td><td>${ed ? `<input type="date" class="cin" data-a="marr" data-id="${a.id}" value="${a.arr || ''}">` : fmtD(a.arr)}</td><td class="mono">${anc(a.arr)}</td><td><span class="mrow">${medRow(a, ed)}</span></td>
         <td>${nx ? `<span class="mrow">${medIcon(nx.md, 'sm')} <span class="note">dans ${daysUntil(nx.s.due)} j (${fmtD(nx.s.due)})</span></span>` : a.arr ? '<span class="note">tous obtenus</span>' : '<span class="note">date d’arrivée inconnue</span>'}</td>
         ${ed && manual.length ? `<td><select class="cin" data-a="maward" data-id="${a.id}"><option value="">+ Médaille…</option>${manual.filter(m => !medState(a, m).earned).map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></td>` : ''}</tr>`; }).join('') + `</tbody></table></div>${list.length ? '' : '<p class="note">Aucun agent.</p>'}</section>`;
-  // historique des remises (rubans marqués « remis » + médailles attribuées à la main), du plus récent au plus ancien
   const gq = norm(mgq), given = [];
   S.agents.forEach(a => S.medals.forEach(md => { const aw = S.awards?.[a.id]?.[md.id]; if (!aw) return; const t = aw.given || aw.t; if (!t || (md.n && !aw.given)) return; given.push({ a, md, t, by: aw.by || '', at: md.n ? medState(a, md).due : aw.at }); }));
   given.sort((p, q) => q.t - p.t);
@@ -1017,7 +994,7 @@ function vMda() { return vMed('admin'); }
 function vMedMain() {
   return vMed('main') + (can('medalEdit') || can('sheetSync') ? '<p class="note">Catalogue des médailles et synchronisation Google Sheet : Administration › Gestion des médailles.</p>' : '');
 }
-function medImg(file) { // image redimensionnée (96 px max) pour rester légère dans la base
+function medImg(file) {
   return new Promise((ok, no) => { const fr = new FileReader(); fr.onerror = no; fr.onload = () => { const im = new Image(); im.onerror = no; im.onload = () => {
     const k = Math.min(1, 96 / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
     c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); const w = c.toDataURL('image/webp', .9); ok(w.startsWith('data:image/webp') ? w : c.toDataURL('image/png')); }; im.src = fr.result; }; fr.readAsDataURL(file); });
@@ -1032,7 +1009,7 @@ document.addEventListener('click', async e => {
   else if (act === 'mapply') { const muts = syncP.items.filter(i => i.on && i.k === 'mut'), n = syncP.items.filter(i => i.on && i.k !== 'quiet').length; if (await dlg({ title: 'Appliquer la synchronisation', msg: `Appliquer ${n} changement(s) ?`, ok: 'Appliquer', icon: 'warn' })) { applySync(); let ko = []; for (const it of muts) { setSync('busy', 'Mutation de ' + full(it.a) + '…'); if (!(await transferAgent(it.a, it.to))) ko.push(full(it.a)); } render(); await dlg({ title: 'Synchronisation terminée', msg: `${n - ko.length} changement(s) appliqué(s).` + (ko.length ? `\n\nMutation impossible pour : ${ko.join(', ')} (réessaie plus tard).` : ''), cancel: null, icon: ko.length ? 'warn' : 'info' }); } }
   else if (act === 'mgive') { Object.assign(aw(id, el.dataset.m), { given: Date.now(), by: me?.name || '' }); upd(); }
   else if (act === 'mungive') { const md = S.medals.find(x => x.id === el.dataset.m), a = S.agents.find(x => x.id === id); if (await dlg({ title: 'Annuler la remise', msg: `« ${md?.name} » de ${a ? full(a) : 'cet agent'} repassera dans « Rubans à remettre ».`, ok: 'Annuler la remise' })) { delete S.awards?.[id]?.[el.dataset.m]; upd(); } }
-  else if (act === 'mtog') { // clic sur un ruban dans le tableau des agents
+  else if (act === 'mtog') {
     const md = S.medals.find(x => x.id === el.dataset.m); if (!md) return;
     if (!md.n) { if (await dlg({ title: 'Retirer la médaille', msg: `Retirer « ${md.name} » à cet agent ?`, ok: 'Retirer', danger: true })) { delete S.awards?.[id]?.[md.id]; upd(); } return; }
     const cur = S.awards?.[id]?.[md.id];
@@ -1051,7 +1028,7 @@ document.addEventListener('change', async e => {
   const el = e.target, act = el.dataset.a, id = el.dataset.id; if (!act || !/^m/.test(act)) return;
   if (['murl', 'mgid', 'mdist', 'mgmap', 'mchk'].includes(act) && !can('sheetSync')) return;
   if (['mname', 'mauto', 'mn', 'mu', 'mcolor', 'mimg', 'marr', 'maward'].includes(act) && !can('medalEdit')) return;
-  if (act === 'mutsel') { // mutation manuelle vers un autre district
+  if (act === 'mutsel') {
     const a = S.agents.find(x => x.id === el.dataset.id), to = el.value; el.value = ''; if (!a || !to || !can('agentEdit')) return;
     if (await dlg({ title: 'Mutation de district', msg: `Muter ${full(a)} de ${dName(DD)} vers ${dName(to)} ?\n\nSes heures, son historique, ses médailles et ses cérémonies passent dans ${dName(to)} et il quitte ${dName(DD)}.`, ok: 'Muter', icon: 'warn' })) {
       setSync('busy', 'Mutation…'); const ok = await transferAgent(a, to); render();
@@ -1079,7 +1056,6 @@ document.addEventListener('change', async e => {
 });
 document.addEventListener('input', e => { if (e.target.id === 'mgq') { mgq = e.target.value; render(); const i = $('#mgq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); return; } if (e.target.id === 'mq') { mq = e.target.value; const t = $('#mtb'); if (t) { render(); const i = $('#mq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } });
 
-// ---------- statistiques agent ----------
 let st = { id: null, f: 0, t: null, q: '', ged: false };
 const lastW = () => S.weeks.length - 1;
 const aSt = (a, f, t) => { const v = a.w.slice(f, t + 1), k = v.filter(x => x != null), sum = k.reduce((x, y) => x + y, 0); return { v, k, n: k.length, sum, avg: k.length ? sum / k.length : 0, act: k.filter(x => x > 0).length, best: k.length ? Math.max(...k) : null, low: k.length ? Math.min(...k) : null, last: k.length ? k.at(-1) : null }; };
@@ -1106,7 +1082,7 @@ function chartSvg(a, f, t, avg) {
   return s + '</svg>';
 }
 function weekTs(w) { if (!w) return 0; const k = weekKey(w); return new Date(Math.floor(k / 10000), Math.floor(k / 100) % 100 - 1, k % 100).getTime(); }
-function gradeHistory(a) { // changements de grade : dates du Google Sheet (modifiables) + journal (création, modifications, mutations) + décisions de cérémonie
+function gradeHistory(a) {
   const gd = Object.entries(a.gdates || {}).filter(([, d]) => d).sort((p, q) => p[1].localeCompare(q[1]));
   const it = gd.map(([g, d], k) => ({ d, t: new Date(d + 'T12:00:00').getTime(), from: k ? gd[k - 1][0] : null, to: g, src: a.gsrc?.[g] === 'admin' ? 'date corrigée' : 'Google Sheet', why: '', st: 'ok' }));
   (S.glog || []).filter(g => g.agent === a.id && !(gd.length && /^création/.test(g.src || ''))).forEach(g => it.push({ w: g.w, t: g.t, from: g.from, to: g.to, src: g.src, why: '', st: 'ok' }));
@@ -1149,7 +1125,6 @@ function vSta() {
   <div class="sd">${a ? staDetail(a) : '<section class="panel"><h2>Sélectionne un agent</h2><p class="note">Choisis un agent dans la liste : tu verras toutes ses statistiques depuis le début du site — heures, moyennes sur la période de ton choix, changements de grade, sanctions et cérémonies.</p></section>'}</div></div>`;
 }
 
-// ---------- menus déroulants personnalisés : remplacent la liste native des <select> (le <select> reste en coulisses : valeur + événement change) ----------
 const CHEV = '<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>', CHECK = '<svg class="cs-chk" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
 let csPop = null, csCur = null, csHl = -1;
 function csClose() { if (csPop) { csPop.remove(); csPop = null; } if (csCur) { csCur.wrap.classList.remove('open'); csCur = null; } }
@@ -1179,7 +1154,7 @@ function csBuild(sel, w) {
   wrap.appendChild(btn); sel.after(wrap);
   const update = () => { const o = sel.options[sel.selectedIndex], v = btn.firstChild; v.textContent = o ? o.textContent : ''; v.classList.toggle('cs-ph', !!o && o.value === ''); };
   sel._cs = update; update();
-  const d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value'); // value = ... depuis le code met aussi l'affichage à jour
+  const d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
   Object.defineProperty(sel, 'value', { configurable: true, get() { return d.get.call(this); }, set(v) { d.set.call(this, v); update(); } });
   btn.addEventListener('click', () => (csCur && csCur.sel === sel) ? csClose() : csOpen(sel, wrap));
   btn.addEventListener('keydown', e => {
@@ -1197,7 +1172,7 @@ function csBuild(sel, w) {
 }
 function csEnhance() {
   const L = [...document.querySelectorAll('select:not([data-cs])')]; if (!L.length) return;
-  const W = L.map(s => s.offsetWidth); L.forEach((s, i) => csBuild(s, W[i])); // mesures groupées puis construction (évite les reflows)
+  const W = L.map(s => s.offsetWidth); L.forEach((s, i) => csBuild(s, W[i]));
 }
 document.addEventListener('click', e => { const o = e.target.closest('.cs-opt'); if (o && csPop) csPick(+o.dataset.i); });
 document.addEventListener('mousedown', e => { if (csPop && !e.target.closest('.cs-pop') && !e.target.closest('.cs')) csClose(); });
@@ -1205,7 +1180,6 @@ addEventListener('scroll', e => { if (csPop && !csPop.contains(e.target)) csClos
 addEventListener('resize', csClose);
 new MutationObserver(() => { csEnhance(); if (csCur && !document.contains(csCur.sel)) csClose(); }).observe(document.body, { childList: true, subtree: true });
 csEnhance();
-// mode clair / sombre (classe « light » sur <html>, mémorisée ; le script du <head> l'applique avant l'affichage)
 const MKEY = KEY + '-mode'; let mode = 'dark'; try { mode = localStorage.getItem(MKEY) === 'light' ? 'light' : 'dark'; } catch (e) {}
 const applyMode = () => { document.documentElement.classList.toggle('light', mode === 'light'); $('#mode').title = mode === 'light' ? 'Passer en mode sombre' : 'Passer en mode clair'; };
 $('#mode').onclick = () => { mode = mode === 'light' ? 'dark' : 'light'; try { localStorage.setItem(MKEY, mode); } catch (e) {} applyMode(); };
@@ -1214,8 +1188,6 @@ const tick = () => { const d = new Date(); $('#clk').innerHTML = `<b>${d.toLocal
 tick(); setInterval(tick, 1000);
 render();
 document.addEventListener('focusout', () => { if (needRender) setTimeout(() => { if (needRender && !editing()) { needRender = false; render(); } }, 150); });
-// Synchronisation économe (hébergement gratuit : nombre de requêtes limité) :
-// toutes les 15 s quand on utilise le site, toutes les 60 s après 5 min sans activité, rien quand l'onglet est masqué.
 let lastAct = Date.now(), lastSync = 0;
 ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => addEventListener(ev, () => { const was = Date.now() - lastAct > 3e5; lastAct = Date.now(); if (was) sync(); }, { passive: true }));
 setInterval(() => { if (document.hidden) return; const gap = Date.now() - lastAct > 3e5 ? 60000 : 15000; if (Date.now() - lastSync >= gap) { lastSync = Date.now(); sync(); } }, 5000);
